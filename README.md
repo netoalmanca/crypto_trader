@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Projeto Trader de Criptomoedas com Django e Binance API
 
 Este é um projeto Django para criar uma plataforma de compra e venda de criptomoedas, utilizando a API da Binance para dados de mercado e transações.
@@ -90,3 +91,6 @@ crypto_trader_project/
 * Definir modelos de dados para portfólio e transações.
 * Criar interfaces para visualização de dados e trading.
 
+=======
+# Projeto Crypto Trader
+>>>>>>> d24797a (Adiciona README inicial)
