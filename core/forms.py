@@ -167,8 +167,7 @@ class UserProfileAPIForm(forms.ModelForm):
             return self.instance.binance_api_secret
         return secret
 
-# Formulário para realizar uma ordem de compra a mercado
-class TradeForm(forms.Form):
+class TradeForm(forms.Form): # Para COMPRA
     BUY_TYPE_CHOICES = [
         ('QUANTITY', 'Comprar pela Quantidade da Cripto'),
         ('QUOTE_QUANTITY', 'Comprar pelo Valor da Moeda de Cotação')
@@ -176,7 +175,7 @@ class TradeForm(forms.Form):
     buy_type = forms.ChoiceField(
         choices=BUY_TYPE_CHOICES,
         label=_("Tipo de Compra"),
-        widget=forms.RadioSelect(attrs={'class': 'mr-2'}), # Estilização básica para radio
+        widget=forms.RadioSelect(attrs={'class': 'mr-2'}), 
         initial='QUANTITY'
     )
     cryptocurrency = forms.ModelChoiceField(
@@ -187,14 +186,14 @@ class TradeForm(forms.Form):
     quantity = forms.DecimalField(
         label=_("Quantidade da Cripto (ex: 0.01 BTC)"),
         min_value=Decimal('0.00000001'), 
-        required=False, # Será condicionalmente obrigatório
+        required=False, 
         widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 0.01', 'step': 'any'}),
         help_text=_("Preencha se 'Comprar pela Quantidade da Cripto' estiver selecionado.")
     )
     quote_quantity = forms.DecimalField(
         label=_("Valor a Gastar (ex: 100 USDT)"),
-        min_value=Decimal('0.01'), # Ajustar conforme MIN_NOTIONAL da Binance (geralmente ~10 USD)
-        required=False, # Será condicionalmente obrigatório
+        min_value=Decimal('0.01'), 
+        required=False, 
         widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 100'}),
         help_text=_("Preencha se 'Comprar pelo Valor da Moeda de Cotação' estiver selecionado. O valor é na moeda de cotação da cripto (ex: USDT, BRL).")
     )
@@ -211,14 +210,12 @@ class TradeForm(forms.Form):
                 self.add_error('quantity', _("A quantidade da cripto é obrigatória para este tipo de compra."))
             if quantity and quantity <= 0:
                  self.add_error('quantity', _("A quantidade da cripto deve ser positiva."))
-            # Limpar o outro campo para evitar confusão
             cleaned_data['quote_quantity'] = None
         elif buy_type == 'QUOTE_QUANTITY':
             if not quote_quantity:
                 self.add_error('quote_quantity', _("O valor a gastar é obrigatório para este tipo de compra."))
             if quote_quantity and quote_quantity <= 0:
                 self.add_error('quote_quantity', _("O valor a gastar deve ser positivo."))
-            # Limpar o outro campo
             cleaned_data['quantity'] = None
         
         if not cryptocurrency:
@@ -226,3 +223,91 @@ class TradeForm(forms.Form):
 
         return cleaned_data
 
+# Formulário para realizar uma ordem de VENDA a mercado
+class MarketSellForm(forms.Form):
+    SELL_TYPE_CHOICES = [
+        ('QUANTITY', 'Vender Quantidade Específica da Cripto'),
+        ('QUOTE_RECEIVE', 'Vender para Receber Valor X na Moeda de Cotação (Aproximado)')
+    ]
+    sell_type = forms.ChoiceField(
+        choices=SELL_TYPE_CHOICES,
+        label=_("Tipo de Venda"),
+        widget=forms.RadioSelect(attrs={'class': 'mr-2'}),
+        initial='QUANTITY'
+    )
+    cryptocurrency = forms.ModelChoiceField(
+        queryset=Cryptocurrency.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        label=_("Criptomoeda para Vender (do seu portfólio)")
+    )
+    quantity = forms.DecimalField(
+        label=_("Quantidade da Cripto a Vender"),
+        min_value=Decimal('0.00000001'),
+        required=False, # Será condicionalmente obrigatório
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 0.5', 'step': 'any'}),
+        help_text=_("Preencha se 'Vender Quantidade Específica' estiver selecionado.")
+    )
+    quote_quantity_to_receive = forms.DecimalField(
+        label=_("Valor Desejado a Receber (ex: 100 USDT)"),
+        min_value=Decimal('0.01'), # Ajustar conforme MIN_NOTIONAL
+        required=False, # Será condicionalmente obrigatório
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 100'}),
+        help_text=_("Preencha se 'Vender para Receber Valor X' estiver selecionado. Este valor é aproximado, a quantidade de cripto a ser vendida será calculada com base no preço de mercado atual.")
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.user_profile = kwargs.pop('user_profile', None)
+        super().__init__(*args, **kwargs)
+        if self.user_profile:
+            user_holdings = Holding.objects.filter(user_profile=self.user_profile, quantity__gt=Decimal('0'))
+            held_crypto_pks = user_holdings.values_list('cryptocurrency__pk', flat=True)
+            self.fields['cryptocurrency'].queryset = Cryptocurrency.objects.filter(pk__in=held_crypto_pks).order_by('name')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        sell_type = cleaned_data.get('sell_type')
+        quantity_to_sell = cleaned_data.get('quantity')
+        quote_to_receive = cleaned_data.get('quote_quantity_to_receive')
+        cryptocurrency = cleaned_data.get('cryptocurrency')
+
+        if not cryptocurrency:
+            self.add_error('cryptocurrency', _("Por favor, selecione uma criptomoeda para vender."))
+            # Não precisa continuar a validação se não há criptomoeda selecionada
+            return cleaned_data
+
+        # Validação comum de saldo para ambos os tipos de venda (a quantidade final a ser vendida)
+        # será determinada na view para 'QUOTE_RECEIVE'
+        if sell_type == 'QUANTITY':
+            if not quantity_to_sell:
+                self.add_error('quantity', _("A quantidade da cripto é obrigatória para este tipo de venda."))
+            elif quantity_to_sell <= 0:
+                self.add_error('quantity', _("A quantidade a vender deve ser positiva."))
+            else: # Verifica saldo apenas se a quantidade for válida
+                try:
+                    holding = Holding.objects.get(user_profile=self.user_profile, cryptocurrency=cryptocurrency)
+                    if holding.quantity < quantity_to_sell:
+                        self.add_error('quantity', 
+                            _("Você não pode vender %(quantity_to_sell)s %(symbol)s. Seu saldo atual é %(current_holding)s %(symbol)s.") %
+                            {'quantity_to_sell': quantity_to_sell, 'symbol': cryptocurrency.symbol, 'current_holding': holding.quantity}
+                        )
+                except Holding.DoesNotExist:
+                     self.add_error('cryptocurrency', _("Você não possui %(symbol)s para vender.") % {'symbol': cryptocurrency.symbol})
+            cleaned_data['quote_quantity_to_receive'] = None # Limpa o campo não usado
+
+        elif sell_type == 'QUOTE_RECEIVE':
+            if not quote_to_receive:
+                self.add_error('quote_quantity_to_receive', _("O valor desejado a receber é obrigatório para este tipo de venda."))
+            elif quote_to_receive <= 0:
+                self.add_error('quote_quantity_to_receive', _("O valor desejado a receber deve ser positivo."))
+            # A verificação de saldo exato para 'QUOTE_RECEIVE' é mais complexa aqui, pois depende do preço.
+            # Uma verificação básica de que o usuário tem *alguma* quantidade pode ser feita.
+            # A view fará a verificação mais precisa após calcular a quantidade de cripto.
+            else:
+                try:
+                    Holding.objects.get(user_profile=self.user_profile, cryptocurrency=cryptocurrency, quantity__gt=Decimal(0))
+                except Holding.DoesNotExist:
+                    self.add_error('cryptocurrency', _("Você não possui %(symbol)s para vender.") % {'symbol': cryptocurrency.symbol})
+
+            cleaned_data['quantity'] = None # Limpa o campo não usado
+        
+        return cleaned_data

@@ -10,7 +10,8 @@ from .forms import (
     CustomAuthenticationForm, 
     TransactionForm, 
     UserProfileAPIForm,
-    TradeForm 
+    TradeForm,
+    MarketSellForm 
 )
 from .models import Cryptocurrency, UserProfile, Holding, Transaction
 from decimal import Decimal, ROUND_DOWN, ROUND_UP, InvalidOperation
@@ -22,36 +23,19 @@ import json
 
 # --- Helper Function para ajustar quantidade ao LOT_SIZE ---
 def adjust_quantity_to_lot_size(quantity_str, step_size_str):
-    """
-    Ajusta a quantidade para ser um múltiplo do step_size (LOT_SIZE).
-    Remove zeros à direita do step_size para determinar a precisão.
-    """
     quantity = Decimal(quantity_str)
     step_size = Decimal(step_size_str)
-
-    if step_size <= Decimal(0): # Evita divisão por zero ou step_size inválido
-        # Retorna a quantidade com uma precisão padrão se o step_size for problemático
+    if step_size <= Decimal(0):
         return quantity.quantize(Decimal('0.00000001'), rounding=ROUND_DOWN)
-
-    # Determina o número de casas decimais do step_size
-    # Ex: step_size '0.001000' -> '0.001' -> 3 casas decimais
-    # Ex: step_size '1.000000' -> '1' -> 0 casas decimais
     normalized_step_size_str = step_size_str.rstrip('0')
     if '.' in normalized_step_size_str:
         precision = len(normalized_step_size_str.split('.')[1])
     else:
         precision = 0
-    
-    # Arredonda a quantidade para baixo para o múltiplo mais próximo do step_size
-    # (quantity / step_size) dá o número de "steps"
-    # .to_integral_value(rounding=ROUND_DOWN) pega a parte inteira desses steps
-    # Depois multiplica de volta pelo step_size
     adjusted_quantity = (quantity / step_size).to_integral_value(rounding=ROUND_DOWN) * step_size
-    
-    # Formata para a precisão correta
     return adjusted_quantity.quantize(Decimal('1e-' + str(precision)), rounding=ROUND_DOWN)
 
-# ... (views: index_view, register_view, etc. permanecem como antes) ...
+# ... (views anteriores) ...
 def index_view(request):
     context = {
         'page_title': 'Bem-vindo ao Crypto Trader',
@@ -255,52 +239,72 @@ def cryptocurrency_list_view(request):
             client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
             client_initialized_successfully = True
         except Exception as e:
-            messages.error(request, f"Falha ao inicializar o cliente da Binance para atualização de preços: {e}")
+            messages.error(request, f"Falha ao inicializar o cliente da Binance: {e}")
             print(f"Falha ao inicializar o cliente da Binance: {e}") 
     else:
-        messages.warning(request, "Chaves API da Binance não configuradas. Os preços não serão atualizados da API.")
-        print("Chaves API da Binance não configuradas. Os preços não serão atualizados da API.")
+        messages.warning(request, "Chaves API da Binance (sistema) não configuradas. Os dados de mercado não serão atualizados da API.")
+        print("Chaves API da Binance (sistema) não configuradas.")
 
     cryptos_from_db = Cryptocurrency.objects.all()
-    updated_cryptos = []
-    prices_updated_count = 0
+    enriched_cryptos_data = []
+    data_updated_count = 0
 
-    for crypto in cryptos_from_db:
+    for crypto_instance in cryptos_from_db:
+        crypto_data = {
+            'db_instance': crypto_instance,
+            'symbol': crypto_instance.symbol,
+            'name': crypto_instance.name,
+            'logo_url': crypto_instance.logo_url,
+            'current_price': crypto_instance.current_price, 
+            'price_currency': crypto_instance.price_currency,
+            'last_updated': crypto_instance.last_updated,
+            'price_change_percent_24h': None,
+            'volume_24h': None,
+            'high_price_24h': None,
+            'low_price_24h': None,
+        }
+
         if client_initialized_successfully and client: 
             try:
-                api_symbol = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
+                api_symbol_pair = f"{crypto_instance.symbol.upper()}{crypto_instance.price_currency.upper()}"
                 
-                ticker = client.get_symbol_ticker(symbol=api_symbol)
+                ticker_24h = client.get_ticker(symbol=api_symbol_pair)
                 
-                if ticker and 'price' in ticker:
-                    crypto.current_price = Decimal(ticker['price'])
-                    crypto.last_updated = timezone.now()
-                    crypto.save() 
-                    prices_updated_count += 1
+                if ticker_24h:
+                    new_price = Decimal(ticker_24h.get('lastPrice', '0')) 
+                    
+                    crypto_instance.current_price = new_price
+                    crypto_instance.last_updated = timezone.now()
+                    crypto_instance.save() 
+                    
+                    crypto_data['current_price'] = new_price
+                    crypto_data['last_updated'] = crypto_instance.last_updated
+                    crypto_data['price_change_percent_24h'] = Decimal(ticker_24h.get('priceChangePercent', '0'))
+                    crypto_data['volume_24h'] = Decimal(ticker_24h.get('volume', '0')) 
+                    crypto_data['high_price_24h'] = Decimal(ticker_24h.get('highPrice', '0'))
+                    crypto_data['low_price_24h'] = Decimal(ticker_24h.get('lowPrice', '0'))
+                    
+                    data_updated_count += 1
                 else:
-                    pass
+                    print(f"Ticker 24h não encontrado para {api_symbol_pair}")
             
             except BinanceAPIException as e:
-                print(f"API Erro (Símbolo: {api_symbol}): {e.message} (Cod: {e.code})")
-            
-            except BinanceRequestException as e:
-                print(f"Request Erro (Símbolo: {api_symbol}): {e.message}")
-                messages.error(request, f"Erro de requisição à Binance ao tentar buscar preços. Tente mais tarde.") 
-            
+                print(f"API Erro ao buscar dados de 24h (Símbolo: {api_symbol_pair}): {e.message} (Cod: {e.code})")
+            except (BinanceRequestException, InvalidOperation) as e: 
+                print(f"Request/Decimal Erro (Símbolo: {api_symbol_pair}): {e}")
             except Exception as e: 
-                print(f"Erro inesperado (Símbolo: {api_symbol}): {str(e)}")
-                messages.error(request, f"Ocorreu um erro inesperado ao tentar atualizar os preços.") 
+                print(f"Erro inesperado (Símbolo: {api_symbol_pair}): {str(e)}")
         
-        updated_cryptos.append(crypto) 
+        enriched_cryptos_data.append(crypto_data) 
 
-    if client_initialized_successfully and prices_updated_count > 0 :
-        messages.success(request, f"{prices_updated_count} preço(s) de criptomoeda(s) foram atualizados da API da Binance.")
-    elif client_initialized_successfully and prices_updated_count == 0 and cryptos_from_db.exists():
-         messages.info(request, "Nenhum preço foi atualizado da API. Verifique a configuração dos pares de moedas no admin (ex: BTC com moeda USDT) e os logs do servidor.")
+    if client_initialized_successfully and data_updated_count > 0 :
+        messages.success(request, f"{data_updated_count} criptomoeda(s) tiveram seus dados de mercado atualizados da API da Binance.")
+    elif client_initialized_successfully and data_updated_count == 0 and cryptos_from_db.exists():
+         messages.info(request, "Nenhum dado de mercado foi atualizado da API. Verifique a configuração dos pares de moedas no admin (ex: BTC com moeda USDT) e os logs do servidor.")
 
     context = {
         'page_title': 'Lista de Criptomoedas',
-        'cryptocurrencies': updated_cryptos, 
+        'cryptocurrencies_data': enriched_cryptos_data, 
     }
     return render(request, 'core/cryptocurrency_list.html', context)
 
@@ -488,12 +492,11 @@ def trade_market_buy_view(request):
             try:
                 client = Client(user_profile.binance_api_key, user_profile.binance_api_secret, tld='com', testnet=True)
                 
-                # Obter informações do símbolo para filtros (LOT_SIZE, MIN_NOTIONAL, etc.)
                 symbol_info = client.get_symbol_info(api_symbol_pair)
                 lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
                 min_notional_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'MIN_NOTIONAL'), None)
                 
-                step_size_str = "0.00000001" # Default
+                step_size_str = "0.00000001" 
                 min_qty_str = "0"
                 if lot_size_filter:
                     step_size_str = lot_size_filter['stepSize']
@@ -502,7 +505,6 @@ def trade_market_buy_view(request):
                 min_notional_str = "0"
                 if min_notional_filter:
                     min_notional_str = min_notional_filter['minNotional']
-
 
                 order_params = {'symbol': api_symbol_pair}
                 log_msg_qty_type = ""
@@ -513,7 +515,7 @@ def trade_market_buy_view(request):
                         messages.error(request, f"A quantidade ajustada ({adjusted_quantity} {crypto_to_buy.symbol}) é menor que a quantidade mínima permitida ({min_qty_str}) para {api_symbol_pair}.")
                         raise ValueError(f"Quantidade ajustada {adjusted_quantity} abaixo da mínima {min_qty_str}")
 
-                    order_params['quantity'] = f"{adjusted_quantity}" # Enviar como string formatada
+                    order_params['quantity'] = f"{adjusted_quantity}" 
                     log_msg_qty_type = f"{adjusted_quantity} {crypto_to_buy.symbol}"
 
                 elif buy_type == 'QUOTE_QUANTITY' and quantity_quote_input:
@@ -535,12 +537,10 @@ def trade_market_buy_view(request):
                 executed_qty_total = Decimal('0')
                 cummulative_quote_qty_total = Decimal('0')
                 
-                # Processar 'fills' para obter dados precisos da execução
-                # Adicionado 'cummulativeQuoteQty' da resposta para ordens de quoteOrderQty
                 if buy_type == 'QUOTE_QUANTITY':
                     executed_qty_total = Decimal(order_response.get('executedQty', '0'))
                     cummulative_quote_qty_total = Decimal(order_response.get('cummulativeQuoteQty', '0'))
-                elif order_response.get('fills'): # Para ordens por 'quantity'
+                elif order_response.get('fills'): 
                     for fill in order_response['fills']:
                         price = Decimal(fill['price'])
                         qty = Decimal(fill['qty'])
@@ -556,7 +556,7 @@ def trade_market_buy_view(request):
                             cryptocurrency=crypto_to_buy,
                             transaction_type='BUY',
                             quantity_crypto=executed_qty_total,
-                            price_per_unit=average_price, # Usar o preço médio efetivo
+                            price_per_unit=average_price, 
                             transaction_date=timezone.now(), 
                             binance_order_id=str(order_response.get('orderId')),
                             notes=f"Compra a mercado via API. Qtd: {executed_qty_total:.8f}, Preço Médio: {average_price:.8f} {crypto_to_buy.price_currency}. Quote Gasto: {cummulative_quote_qty_total:.2f} {crypto_to_buy.price_currency}."
@@ -580,7 +580,7 @@ def trade_market_buy_view(request):
                         holding.save()
 
                     messages.success(request, f"Transação local registrada para compra de {executed_qty_total:.8f} {crypto_to_buy.symbol} a ~{average_price:.2f} {crypto_to_buy.price_currency}.")
-                else: # Se não houve 'fills' ou executedQty foi zero
+                else: 
                     messages.warning(request, f"A ordem foi enviada (ID: {order_response.get('orderId')}), mas não houve execuções reportadas ou a quantidade executada foi zero. Verifique o status na Binance.")
 
                 return redirect('core:transaction_history')
@@ -592,12 +592,12 @@ def trade_market_buy_view(request):
                         error_message = f"Erro de Quantidade (LOT_SIZE): A quantidade especificada não atende aos requisitos de tamanho do lote ({step_size_str}) ou quantidade mínima ({min_qty_str}) da Binance para {api_symbol_pair}. (Detalhe: {e.message})"
                     elif "MIN_NOTIONAL" in e.message.upper():
                          error_message = f"Erro de Valor Mínimo (MIN_NOTIONAL): O valor total da ordem não atinge o mínimo exigido ({min_notional_str} {crypto_to_buy.price_currency}) pela Binance para {api_symbol_pair}. Tente um valor maior. (Detalhe: {e.message})"
-                elif e.code == -2010: # New order rejected
+                elif e.code == -2010: 
                     error_message = f"Ordem Rejeitada pela Binance: {e.message}. Verifique seu saldo na Testnet ou os limites do par."
 
                 messages.error(request, error_message)
                 print(f"Erro API Binance (COMPRA {api_symbol_pair}): {e.message} (Cod: {e.code})")
-            except ValueError as ve: # Captura ValueError da nossa validação de min_qty/min_notional
+            except ValueError as ve: 
                 messages.error(request, str(ve))
             except BinanceRequestException as e:
                 messages.error(request, f"Erro de requisição à Binance: {e.message}")
@@ -613,6 +613,172 @@ def trade_market_buy_view(request):
         'page_title': 'Comprar Criptomoeda (Ordem a Mercado - Testnet)'
     }
     return render(request, 'core/trade_form.html', context)
+
+@login_required
+def trade_market_sell_view(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+
+    if not user_profile.binance_api_key or not user_profile.binance_api_secret:
+        messages.error(request, "Suas chaves API da Binance não estão configuradas. Por favor, configure-as em seu perfil antes de negociar.")
+        return redirect('core:update_api_keys')
+
+    if request.method == 'POST':
+        form = MarketSellForm(request.POST, user_profile=user_profile) 
+        if form.is_valid():
+            crypto_to_sell = form.cleaned_data['cryptocurrency']
+            sell_type = form.cleaned_data['sell_type']
+            quantity_base_input = form.cleaned_data.get('quantity')
+            quote_quantity_to_receive_input = form.cleaned_data.get('quote_quantity_to_receive')
+            
+            api_symbol_pair = f"{crypto_to_sell.symbol.upper()}{crypto_to_sell.price_currency.upper()}"
+
+            try:
+                client = Client(user_profile.binance_api_key, user_profile.binance_api_secret, tld='com', testnet=True)
+                
+                symbol_info = client.get_symbol_info(api_symbol_pair)
+                lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
+                min_notional_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'MIN_NOTIONAL'), None) # Útil para validar quote_quantity_to_receive
+                
+                step_size_str = "0.00000001" 
+                min_qty_str = "0"
+                if lot_size_filter:
+                    step_size_str = lot_size_filter['stepSize']
+                    min_qty_str = lot_size_filter['minQty']
+                
+                min_notional_str = "0"
+                if min_notional_filter: # Valor mínimo da ordem na moeda de cotação
+                    min_notional_str = min_notional_filter['minNotional']
+
+
+                order_params = {'symbol': api_symbol_pair}
+                quantity_to_actually_sell = Decimal('0') # Quantidade da cripto base que será vendida
+
+                if sell_type == 'QUANTITY' and quantity_base_input:
+                    adjusted_quantity = adjust_quantity_to_lot_size(str(quantity_base_input), step_size_str)
+                    if adjusted_quantity < Decimal(min_qty_str):
+                         messages.error(request, f"A quantidade ajustada para venda ({adjusted_quantity} {crypto_to_sell.symbol}) é menor que a quantidade mínima permitida ({min_qty_str}) para {api_symbol_pair}.")
+                         raise ValueError(f"Quantidade ajustada para venda {adjusted_quantity} abaixo da mínima {min_qty_str}")
+                    if adjusted_quantity == Decimal(0):
+                        messages.error(request, f"A quantidade ajustada para venda de {crypto_to_sell.symbol} é zero. A ordem não foi enviada.")
+                        raise ValueError("Quantidade ajustada para venda é zero.")
+                    
+                    quantity_to_actually_sell = adjusted_quantity
+                    order_params['quantity'] = f"{quantity_to_actually_sell}"
+                    log_msg_qty_type = f"{quantity_to_actually_sell} {crypto_to_sell.symbol}"
+
+                elif sell_type == 'QUOTE_RECEIVE' and quote_quantity_to_receive_input:
+                    if quote_quantity_to_receive_input < Decimal(min_notional_str):
+                        messages.error(request, f"O valor desejado a receber ({quote_quantity_to_receive_input} {crypto_to_sell.price_currency}) é menor que o valor nocional mínimo permitido ({min_notional_str}) para {api_symbol_pair}.")
+                        raise ValueError(f"Valor desejado {quote_quantity_to_receive_input} abaixo do nocional mínimo {min_notional_str}")
+
+                    # Para vender por 'quote quantity', precisamos estimar a quantidade da base
+                    # A API não suporta 'quoteOrderQty' para venda a mercado diretamente da mesma forma que para compra.
+                    # Precisamos vender uma 'quantity' da base.
+                    # 1. Obter o preço de mercado atual (ask price, pois queremos vender)
+                    # 2. Calcular a quantidade da base: quote_quantity_to_receive_input / ask_price
+                    # 3. Ajustar essa quantidade ao LOT_SIZE
+                    # 4. Verificar se o usuário tem essa quantidade.
+                    
+                    # Obter o melhor preço de compra (bid) no livro de ofertas, pois estamos vendendo
+                    depth = client.get_order_book(symbol=api_symbol_pair, limit=5)
+                    if not depth['bids']:
+                        messages.error(request, f"Não foi possível obter o preço de mercado atual para {api_symbol_pair} para calcular a quantidade de venda.")
+                        raise ValueError("Livro de ofertas vazio ou indisponível.")
+                    
+                    current_market_price = Decimal(depth['bids'][0][0]) # Melhor preço de compra (alguém querendo comprar de você)
+                    
+                    if current_market_price <= 0:
+                         messages.error(request, f"Preço de mercado inválido ({current_market_price}) obtido para {api_symbol_pair}.")
+                         raise ValueError("Preço de mercado inválido.")
+
+                    estimated_base_qty_to_sell = quote_quantity_to_receive_input / current_market_price
+                    adjusted_quantity_to_sell = adjust_quantity_to_lot_size(str(estimated_base_qty_to_sell), step_size_str)
+
+                    if adjusted_quantity_to_sell < Decimal(min_qty_str):
+                         messages.error(request, f"A quantidade calculada para venda ({adjusted_quantity_to_sell} {crypto_to_sell.symbol}) para obter ~{quote_quantity_to_receive_input} {crypto_to_sell.price_currency} é menor que a quantidade mínima permitida ({min_qty_str}).")
+                         raise ValueError("Quantidade calculada para venda abaixo da mínima.")
+                    if adjusted_quantity_to_sell == Decimal(0):
+                        messages.error(request, f"A quantidade calculada para venda de {crypto_to_sell.symbol} é zero. Tente um valor maior para receber.")
+                        raise ValueError("Quantidade calculada para venda é zero.")
+
+                    # Verificar se o usuário tem essa quantidade calculada
+                    user_holding = Holding.objects.get(user_profile=user_profile, cryptocurrency=crypto_to_sell)
+                    if user_holding.quantity < adjusted_quantity_to_sell:
+                        messages.error(request, f"Saldo insuficiente. Para obter ~{quote_quantity_to_receive_input} {crypto_to_sell.price_currency}, você precisaria vender ~{adjusted_quantity_to_sell:.8f} {crypto_to_sell.symbol}, mas seu saldo é {user_holding.quantity:.8f}.")
+                        raise ValueError("Saldo insuficiente para a quantidade calculada.")
+
+                    quantity_to_actually_sell = adjusted_quantity_to_sell
+                    order_params['quantity'] = f"{quantity_to_actually_sell}"
+                    log_msg_qty_type = f"~{quote_quantity_to_receive_input} {crypto_to_sell.price_currency} de (vendendo {quantity_to_actually_sell} {crypto_to_sell.symbol})"
+                else:
+                    messages.error(request, "Tipo de venda ou valor inválido.")
+                    return redirect('core:trade_market_sell')
+
+                messages.info(request, f"Tentando executar ordem de VENDA A MERCADO: {log_msg_qty_type} ({api_symbol_pair}) na Testnet...")
+                
+                order_response = client.order_market_sell(**order_params)
+
+                messages.success(request, f"Ordem de VENDA para {api_symbol_pair} enviada com sucesso! ID da Ordem: {order_response.get('orderId')}")
+                
+                executed_qty_total = Decimal(order_response.get('executedQty', '0'))
+                cummulative_quote_qty_total = Decimal(order_response.get('cummulativeQuoteQty', '0'))
+                               
+                if executed_qty_total > 0:
+                    average_price = (cummulative_quote_qty_total / executed_qty_total)
+                    
+                    with db_transaction.atomic():
+                        local_tx = Transaction.objects.create(
+                            user_profile=user_profile,
+                            cryptocurrency=crypto_to_sell,
+                            transaction_type='SELL',
+                            quantity_crypto=executed_qty_total,
+                            price_per_unit=average_price,
+                            transaction_date=timezone.now(), 
+                            binance_order_id=str(order_response.get('orderId')),
+                            notes=f"Venda a mercado via API. Qtd: {executed_qty_total:.8f}, Preço Médio: {average_price:.8f} {crypto_to_sell.price_currency}. Quote Recebido: {cummulative_quote_qty_total:.2f} {crypto_to_sell.price_currency}."
+                        )
+                        
+                        holding = Holding.objects.get(user_profile=user_profile, cryptocurrency=crypto_to_sell)
+                        holding.quantity -= executed_qty_total 
+                        if holding.quantity < Decimal('0.000000005'): 
+                            holding.quantity = Decimal('0.0')
+                        
+                        if holding.quantity == Decimal('0.0'):
+                            holding.average_buy_price = Decimal('0.0') 
+                        
+                        holding.save()
+
+                    messages.success(request, f"Transação local registrada para venda de {executed_qty_total:.8f} {crypto_to_sell.symbol} a ~{average_price:.2f} {crypto_to_sell.price_currency}.")
+                else:
+                     messages.warning(request, f"A ordem de venda foi enviada (ID: {order_response.get('orderId')}), mas não houve execuções reportadas ou a quantidade executada foi zero. Verifique o status na Binance.")
+
+                return redirect('core:transaction_history')
+
+            except BinanceAPIException as e:
+                error_message = f"Erro da API Binance: {e.message} (Cod: {e.code})"
+                if e.code == -1013: 
+                    if "LOT_SIZE" in e.message.upper():
+                        error_message = f"Erro de Quantidade (LOT_SIZE): A quantidade para venda não atende aos requisitos de tamanho do lote ({step_size_str}) ou quantidade mínima ({min_qty_str}) da Binance para {api_symbol_pair}. (Detalhe: {e.message})"
+                elif e.code == -2010: 
+                    error_message = f"Ordem de Venda Rejeitada pela Binance: {e.message}. Verifique seu saldo da criptomoeda na Testnet ou os limites do par."
+                messages.error(request, error_message)
+                print(f"Erro API Binance (VENDA {api_symbol_pair}): {e.message} (Cod: {e.code})")
+            except ValueError as ve: 
+                messages.error(request, str(ve)) # Mostra a mensagem de erro customizada de ValueError
+            except BinanceRequestException as e:
+                messages.error(request, f"Erro de requisição à Binance: {e.message}")
+            except Exception as e:
+                messages.error(request, f"Erro inesperado ao tentar vender {crypto_to_sell.symbol}: {str(e)}")
+        else: 
+            messages.error(request, "Por favor, corrija os erros no formulário.")
+    else:
+        form = MarketSellForm(user_profile=user_profile) 
+
+    context = {
+        'form': form,
+        'page_title': 'Vender Criptomoeda (Ordem a Mercado - Testnet)'
+    }
+    return render(request, 'core/trade_sell_form.html', context) 
 
 @login_required
 @db_transaction.atomic 
@@ -709,4 +875,3 @@ def update_api_keys_view(request):
         'page_title': 'Configurar Chaves API e Preferências'
     }
     return render(request, 'core/profile_api_keys.html', context)
-
