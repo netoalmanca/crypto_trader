@@ -13,10 +13,11 @@
                 Bem-vindo(a) de volta, <strong class="text-white">{{ user.first_name|default:user.username }}</strong>!
             </p>
         </div>
-        <div class="mt-4 sm:mt-0">
+        <div class="mt-4 sm:mt-0 text-right">
             {% if user_profile %}
             <p class="text-sm text-gray-400">Moeda Preferida: <span class="font-semibold text-gray-200">{{ user_profile.get_preferred_fiat_currency_display }}</span></p>
             {% endif %}
+            <a href="{% url 'core:update_api_keys' %}" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">Configurar Chaves API / Preferências</a>
         </div>
     </div>
     
@@ -27,7 +28,6 @@
                 {{ total_portfolio_value|floatformat:2 }} {{ portfolio_currency }}
             </p>
             <p class="text-xs text-gray-500 mt-1">Baseado nos preços atuais ({{ portfolio_currency }})</p>
-            {# Adicionar um pequeno aviso se a conversão não for totalmente precisa #}
             {% if show_conversion_warning or show_currency_mismatch_warning %}
                 <p class="text-xs text-yellow-400 mt-1">Atenção: O valor pode não refletir totalmente sua moeda preferida devido a limitações na conversão ou disponibilidade de taxas.</p>
             {% endif %}
@@ -78,7 +78,9 @@
                                         <div class="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-sm mr-3">{{ item.holding.cryptocurrency.symbol|slice:":2" }}</div>
                                     {% endif %}
                                     <div>
-                                        <p class="text-blue-400 font-semibold whitespace-no-wrap">{{ item.holding.cryptocurrency.symbol }}</p>
+                                        <a href="{% url 'core:cryptocurrency_detail' symbol=item.holding.cryptocurrency.symbol %}" class="text-blue-400 hover:text-blue-300 font-semibold whitespace-no-wrap">
+                                            {{ item.holding.cryptocurrency.symbol }}
+                                        </a>
                                         <p class="text-gray-400 text-xs whitespace-no-wrap">{{ item.holding.cryptocurrency.name }}</p>
                                     </div>
                                 </div>
@@ -156,6 +158,8 @@
         <h3 class="text-2xl font-semibold text-white mb-4">Ferramentas e Testes</h3>
         <div class="flex flex-wrap gap-4">
             <a href="{% url 'core:binance_test' %}" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">Testar API Binance</a>
+            {# Adicionar um link para a página de configuração de perfil/API keys #}
+            <a href="{% url 'core:update_api_keys' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">Configurar Chaves API</a>
         </div>
     </div>
 </div>

@@ -1,11 +1,10 @@
-# core/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.conf import settings
 from django.utils import timezone
-from .forms import CustomUserCreationForm, CustomAuthenticationForm, TransactionForm
+from .forms import CustomUserCreationForm, CustomAuthenticationForm, TransactionForm, UserProfileAPIForm # Adicionado UserProfileAPIForm
 from .models import Cryptocurrency, UserProfile, Holding, Transaction
 from decimal import Decimal
 from binance.client import Client
@@ -14,8 +13,7 @@ from django.db import transaction as db_transaction
 import datetime 
 import json 
 
-# Create your views here.
-
+# ... (outras views permanecem as mesmas: index_view, register_view, etc.) ...
 def index_view(request):
     """
     View para a página inicial.
@@ -41,6 +39,7 @@ def register_view(request):
             messages.success(request, f'Conta criada com sucesso para {user.username}! Bem-vindo(a)!')
             return redirect('core:dashboard')
         else:
+            # Coletar e exibir mensagens de erro detalhadas
             for field in form:
                 for error_list in field.errors.as_data():
                     for error in error_list:
@@ -74,7 +73,7 @@ def login_view(request):
                 return redirect(next_page or 'core:dashboard')
             else:
                 messages.error(request, 'Nome de usuário ou senha inválidos.')
-        else: 
+        else: # Erros de formulário
             if form.non_field_errors():
                  for error in form.non_field_errors():
                     messages.error(request, error)
@@ -85,7 +84,7 @@ def login_view(request):
                         for error in error_list:
                             messages.error(request, f"{field.label}: {error.message}")
                             has_field_errors = True
-                if not has_field_errors and not form.non_field_errors(): 
+                if not has_field_errors and not form.non_field_errors(): # Fallback genérico
                      messages.error(request, 'Dados de login inválidos. Verifique e tente novamente.')
     else:
         form = CustomAuthenticationForm()
@@ -108,25 +107,20 @@ def dashboard_view(request):
     Exibe o valor total do portfólio e as posses de criptomoedas.
     """
     try:
-        user_profile = UserProfile.objects.get(user=request.user)
+        user_profile, created = UserProfile.objects.get_or_create(user=request.user) # Garante que o perfil exista
         holdings_qs = Holding.objects.filter(user_profile=user_profile).select_related('cryptocurrency')
-    except UserProfile.DoesNotExist:
-        messages.error(request, "Perfil de usuário não encontrado. Um novo perfil foi criado, por favor, tente novamente.")
-        UserProfile.objects.get_or_create(user=request.user)
-        return redirect('core:dashboard') 
-    except Exception as e:
+    except Exception as e: # Captura mais genérica, idealmente seria mais específica
         messages.error(request, f"Ocorreu um erro ao carregar o dashboard: {e}")
         return redirect('core:index')
 
     total_portfolio_value_in_preferred_currency = Decimal('0.0')
     enriched_holdings = []
     
-    # Flags para controle de mensagens de aviso no template
     conversion_warning_shown_for_request = False
     currency_mismatch_warning_shown_for_request = False
     
     client = None
-    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET:
+    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET: # Chaves do sistema para conversão
         try:
             client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
         except Exception:
@@ -142,6 +136,7 @@ def dashboard_view(request):
             elif client: 
                 try:
                     conversion_pair = f"{holding_item.cryptocurrency.price_currency.upper()}{user_profile.preferred_fiat_currency.upper()}"
+                    # Casos especiais para evitar chamadas desnecessárias ou pares inexistentes
                     if holding_item.cryptocurrency.price_currency.upper() == "USDT" and user_profile.preferred_fiat_currency.upper() == "USD":
                         conversion_rate = Decimal('1.0') 
                     elif conversion_pair == f"{user_profile.preferred_fiat_currency.upper()}{user_profile.preferred_fiat_currency.upper()}":
@@ -182,7 +177,6 @@ def dashboard_view(request):
         'holdings': enriched_holdings,
         'total_portfolio_value': total_portfolio_value_in_preferred_currency,
         'portfolio_currency': user_profile.preferred_fiat_currency,
-        # Passa os flags para o template
         'show_conversion_warning': conversion_warning_shown_for_request,
         'show_currency_mismatch_warning': currency_mismatch_warning_shown_for_request,
     }
@@ -448,3 +442,32 @@ def transaction_history_view(request):
         'user_profile': user_profile, 
     }
     return render(request, 'core/transaction_history.html', context)
+
+# Nova view para atualizar as chaves API do usuário
+@login_required
+def update_api_keys_view(request):
+    """
+    Permite ao usuário atualizar suas chaves API da Binance e moeda preferida.
+    """
+    # Garante que o UserProfile exista, criando se necessário.
+    # O signal já deve cuidar disso na criação do User, mas é uma segurança extra.
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        # Passa a instância para o formulário para que ele saiba que está atualizando
+        form = UserProfileAPIForm(request.POST, instance=user_profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Suas configurações de API e preferências foram atualizadas com sucesso!')
+            return redirect('core:dashboard') # Ou para a mesma página, se preferir
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        # Ao carregar a página (GET), preenche o formulário com os dados existentes
+        form = UserProfileAPIForm(instance=user_profile)
+
+    context = {
+        'form': form,
+        'page_title': 'Configurar Chaves API e Preferências'
+    }
+    return render(request, 'core/profile_api_keys.html', context)

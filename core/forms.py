@@ -3,53 +3,61 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone 
-from .models import Cryptocurrency, Transaction, Holding 
+from .models import Cryptocurrency, Transaction, Holding, UserProfile, FIAT_CURRENCY_CHOICES # Adicionado UserProfile e FIAT_CURRENCY_CHOICES
 from decimal import Decimal
 
 class CustomUserCreationForm(UserCreationForm):
     email = forms.EmailField(
         required=True, 
-        widget=forms.EmailInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'placeholder': 'Seu melhor email'})
+        widget=forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'Seu melhor email'})
     )
     first_name = forms.CharField(
         label=_("Nome"),
         max_length=30, 
         required=False, 
-        widget=forms.TextInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'placeholder': 'Nome (Opcional)'})
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nome (Opcional)'})
     )
     last_name = forms.CharField(
         label=_("Sobrenome"),
         max_length=150, 
         required=False, 
-        widget=forms.TextInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'placeholder': 'Sobrenome (Opcional)'})
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Sobrenome (Opcional)'})
     )
     
     class Meta(UserCreationForm.Meta): 
         model = User
         fields = UserCreationForm.Meta.fields + ('email', 'first_name', 'last_name')
         widgets = {
-            'username': forms.TextInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'placeholder': 'Nome de Usuário'}),
+            'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nome de Usuário'}),
+            # Os widgets para senha já são tratados pelo UserCreationForm
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Remove o texto de ajuda padrão do password2 para manter a interface limpa, se desejado
+        if 'password2' in self.fields:
+            self.fields['password2'].help_text = None
+
 
 class CustomAuthenticationForm(AuthenticationForm):
-    username = forms.CharField(widget=forms.TextInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'autofocus': True, 'placeholder': 'Nome de Usuário'}))
-    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400', 'placeholder': 'Senha'}))
+    username = forms.CharField(widget=forms.TextInput(attrs={'class': 'form-input', 'autofocus': True, 'placeholder': 'Nome de Usuário'}))
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Senha'}))
 
 
 class TransactionForm(forms.ModelForm):
     transaction_date = forms.DateTimeField(
         label=_("Data da Transação"),
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-input bg-gray-700 text-white'}),
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-input'}),
         initial=timezone.now
     )
     cryptocurrency = forms.ModelChoiceField(
         queryset=Cryptocurrency.objects.all().order_by('name'),
-        widget=forms.Select(attrs={'class': 'form-input bg-gray-700 text-white'}),
+        widget=forms.Select(attrs={'class': 'form-input'}),
         label=_("Criptomoeda")
     )
     transaction_type = forms.ChoiceField(
         choices=[choice for choice in Transaction.TRANSACTION_TYPE_CHOICES if choice[0] in ['BUY', 'SELL']],
-        widget=forms.Select(attrs={'class': 'form-input bg-gray-700 text-white'}),
+        widget=forms.Select(attrs={'class': 'form-input'}),
         label=_("Tipo de Transação")
     )
     
@@ -65,10 +73,10 @@ class TransactionForm(forms.ModelForm):
             'notes'
         ]
         widgets = {
-            'quantity_crypto': forms.NumberInput(attrs={'class': 'form-input bg-gray-700 text-white', 'placeholder': 'Ex: 0.5', 'step': 'any'}),
-            'price_per_unit': forms.NumberInput(attrs={'class': 'form-input bg-gray-700 text-white', 'placeholder': 'Preço na moeda base da cripto', 'step': 'any'}),
-            'fees': forms.NumberInput(attrs={'class': 'form-input bg-gray-700 text-white', 'placeholder': 'Taxas na moeda base da cripto', 'step': 'any'}),
-            'notes': forms.Textarea(attrs={'class': 'form-input bg-gray-700 text-white', 'rows': 3, 'placeholder': 'Opcional'}),
+            'quantity_crypto': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 0.5', 'step': 'any'}),
+            'price_per_unit': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Preço na moeda base da cripto', 'step': 'any'}),
+            'fees': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Taxas na moeda base da cripto', 'step': 'any'}),
+            'notes': forms.Textarea(attrs={'class': 'form-input', 'rows': 3, 'placeholder': 'Opcional (Ex: corretora, motivo)'}),
         }
         labels = {
             'quantity_crypto': _("Quantidade (Cripto)"),
@@ -80,6 +88,9 @@ class TransactionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user_profile = kwargs.pop('user_profile', None) 
         super().__init__(*args, **kwargs)
+        if self.instance and self.instance.fees is None:
+            self.initial['fees'] = Decimal('0.00')
+
 
     def clean_quantity_crypto(self):
         quantity = self.cleaned_data.get('quantity_crypto')
@@ -91,9 +102,9 @@ class TransactionForm(forms.ModelForm):
         price = self.cleaned_data.get('price_per_unit')
         transaction_type = self.cleaned_data.get("transaction_type")
         if transaction_type in ['BUY', 'SELL']: 
-            if price is None:
+            if price is None: 
                  raise forms.ValidationError(_("O preço por unidade é obrigatório para compras e vendas."))
-            if price < 0:
+            if price < 0: 
                 raise forms.ValidationError(_("O preço por unidade não pode ser negativo."))
         return price
     
@@ -101,7 +112,7 @@ class TransactionForm(forms.ModelForm):
         fees = self.cleaned_data.get('fees')
         if fees is not None and fees < 0:
             raise forms.ValidationError(_("As taxas não podem ser negativas."))
-        return fees if fees is not None else Decimal('0.00')
+        return fees if fees is not None else Decimal('0.00') 
 
     def clean(self):
         cleaned_data = super().clean()
@@ -123,3 +134,42 @@ class TransactionForm(forms.ModelForm):
                 )
         
         return cleaned_data
+
+class UserProfileAPIForm(forms.ModelForm):
+    binance_api_key = forms.CharField(
+        label=_("Sua Chave API da Binance (Testnet)"),
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Cole sua chave API aqui'}),
+        required=False, 
+        help_text=_("Certifique-se de que esta chave tem permissões para consulta de saldo e trading na Testnet.")
+    )
+    binance_api_secret = forms.CharField(
+        label=_("Seu Segredo API da Binance (Testnet)"),
+        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Cole seu segredo API aqui', 'render_value': False}), # Alterado render_value para False
+        required=False, 
+        help_text=_("Mantenha seu segredo API seguro. Ele será armazenado aqui (atualmente em texto plano - TODO: Criptografar). Se deixar em branco, o segredo existente não será alterado.")
+    )
+    preferred_fiat_currency = forms.ChoiceField(
+        label=_("Sua Moeda Fiat Preferida"),
+        choices=FIAT_CURRENCY_CHOICES, # CORRIGIDO: Usa a variável importada
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        help_text=_("Usada para exibir valores totais e, futuramente, para conversões.")
+    )
+
+    class Meta:
+        model = UserProfile
+        fields = ['binance_api_key', 'binance_api_secret', 'preferred_fiat_currency']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Para o campo binance_api_secret, é melhor não exibir o valor existente.
+        # Se o usuário quiser mudar, ele digita um novo. Se deixar em branco, não alteramos.
+        # A lógica para isso está no clean_binance_api_secret.
+        # O PasswordInput por padrão (render_value=False) não mostra o valor inicial.
+
+    def clean_binance_api_secret(self):
+        secret = self.cleaned_data.get('binance_api_secret')
+        # Se o campo do segredo API for deixado em branco durante uma atualização de um perfil existente,
+        # mantenha o valor original do segredo.
+        if self.instance and self.instance.pk and not secret:
+            return self.instance.binance_api_secret
+        return secret

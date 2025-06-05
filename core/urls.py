@@ -11,7 +11,9 @@ urlpatterns = [
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('binance-test/', views.binance_test_view, name='binance_test'),
     path('cryptocurrencies/', views.cryptocurrency_list_view, name='cryptocurrency_list'),
+    path('cryptocurrency/<str:symbol>/', views.cryptocurrency_detail_view, name='cryptocurrency_detail'),
     path('transactions/add/', views.add_transaction_view, name='add_transaction'),
     path('transactions/history/', views.transaction_history_view, name='transaction_history'),
-    path('cryptocurrency/<str:symbol>/', views.cryptocurrency_detail_view, name='cryptocurrency_detail'),
+    # Nova rota para configurar chaves API e preferências do perfil
+    path('profile/api-keys/', views.update_api_keys_view, name='update_api_keys'),
 ]
