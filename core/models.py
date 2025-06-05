@@ -11,6 +11,7 @@ FIAT_CURRENCY_CHOICES = [
     ('USD', 'Dólar Americano'),
     ('BRL', 'Real Brasileiro'),
     ('EUR', 'Euro'),
+     ('USDT', 'TetherUS'),
 ]
 
 class Cryptocurrency(models.Model):
