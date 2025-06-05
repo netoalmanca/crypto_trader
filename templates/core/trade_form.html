@@ -1,0 +1,116 @@
+{% extends "core/base.html" %}
+{% load l10n %}
+
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto mt-4 sm:mt-8 bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
+    
+    <div class="text-sm text-yellow-300 bg-yellow-700 bg-opacity-30 p-3 rounded-md mb-6">
+        <p><strong>Atenção:</strong> Esta funcionalidade de negociação interage com a <strong>Testnet da Binance</strong>.</p>
+        <p>Certifique-se de que suas chaves API configuradas no perfil têm permissão para "Enable Spot & Margin Trading" na Testnet.</p>
+        <p>Ordens executadas aqui usarão seus fundos da Testnet.</p>
+        <p class="mt-2">A Binance possui regras de trading como tamanho mínimo de lote (LOT_SIZE) e valor mínimo nocional (MIN_NOTIONAL) por ordem. Se sua ordem falhar, verifique se os valores atendem a esses requisitos para o par selecionado.</p>
+    </div>
+
+    <form method="post" novalidate id="tradeForm">
+        {% csrf_token %}
+        
+        <div class="mb-4">
+            <label for="{{ form.cryptocurrency.id_for_label }}" class="form-label">{{ form.cryptocurrency.label_tag }} {% if form.cryptocurrency.field.required %}<span class="text-red-400">*</span>{% endif %}</label>
+            {{ form.cryptocurrency }}
+            {% if form.cryptocurrency.help_text %}
+                <p class="mt-1 text-xs text-gray-300">{{ form.cryptocurrency.help_text|safe }}</p> {# Escurecido para melhor contraste #}
+            {% endif %}
+            {% for error in form.cryptocurrency.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="mb-6">
+            <span class="form-label">{{ form.buy_type.label_tag }}</span>
+            <div class="mt-2 space-y-2 sm:space-y-0 sm:flex sm:space-x-4">
+                {% for radio in form.buy_type %}
+                <label for="{{ radio.id_for_label }}" class="inline-flex items-center cursor-pointer">
+                    {{ radio.tag }}
+                    <span class="ml-2 text-sm text-gray-200">{{ radio.choice_label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+             {% for error in form.buy_type.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div id="quantity_field_group" class="mb-4">
+            <label for="{{ form.quantity.id_for_label }}" class="form-label">{{ form.quantity.label_tag }} {% if form.quantity.field.required and form.buy_type.value == 'QUANTITY' %}<span class="text-red-400">*</span>{% endif %}</label>
+            {{ form.quantity }}
+            {% if form.quantity.help_text %}
+                <p class="mt-1 text-xs text-gray-300">{{ form.quantity.help_text|safe }}</p>
+            {% endif %}
+            {% for error in form.quantity.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div id="quote_quantity_field_group" class="mb-4">
+            <label for="{{ form.quote_quantity.id_for_label }}" class="form-label">{{ form.quote_quantity.label_tag }} {% if form.quote_quantity.field.required and form.buy_type.value == 'QUOTE_QUANTITY' %}<span class="text-red-400">*</span>{% endif %}</label>
+            {{ form.quote_quantity }}
+            {% if form.quote_quantity.help_text %}
+                <p class="mt-1 text-xs text-gray-300">{{ form.quote_quantity.help_text|safe }}</p>
+            {% endif %}
+            {% for error in form.quote_quantity.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+
+        {% if form.non_field_errors %}
+            <div class="mb-4 p-3 bg-red-700 bg-opacity-30 rounded-md">
+                {% for error in form.non_field_errors %}
+                    <p class="text-sm text-red-300">{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <div class="mt-6 sm:mt-8">
+            <button type="submit" class="btn-primary">Executar Compra a Mercado</button>
+        </div>
+    </form>
+    <p class="mt-6 text-center text-sm text-gray-400">
+        <a href="{% url 'core:dashboard' %}" class="font-medium text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a>
+    </p>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const buyTypeRadios = document.querySelectorAll('input[name="buy_type"]');
+    const quantityFieldGroup = document.getElementById('quantity_field_group');
+    const quoteQuantityFieldGroup = document.getElementById('quote_quantity_field_group');
+    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+    const quoteQuantityInput = document.getElementById('{{ form.quote_quantity.id_for_label }}');
+
+    function toggleFields() {
+        const selectedType = document.querySelector('input[name="buy_type"]:checked').value;
+        if (selectedType === 'QUANTITY') {
+            quantityFieldGroup.style.display = 'block';
+            quoteQuantityFieldGroup.style.display = 'none';
+            if(quoteQuantityInput) quoteQuantityInput.value = ''; // Limpa o campo não usado
+        } else if (selectedType === 'QUOTE_QUANTITY') {
+            quantityFieldGroup.style.display = 'none';
+            quoteQuantityFieldGroup.style.display = 'block';
+            if(quantityInput) quantityInput.value = ''; // Limpa o campo não usado
+        }
+    }
+
+    buyTypeRadios.forEach(radio => {
+        radio.addEventListener('change', toggleFields);
+    });
+
+    // Estado inicial
+    toggleFields();
+});
+</script>
+
+{% endblock %}

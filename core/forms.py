@@ -1,9 +1,10 @@
+# core/forms.py
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone 
-from .models import Cryptocurrency, Transaction, Holding, UserProfile, FIAT_CURRENCY_CHOICES # Adicionado UserProfile e FIAT_CURRENCY_CHOICES
+from .models import Cryptocurrency, Transaction, Holding, UserProfile, FIAT_CURRENCY_CHOICES 
 from decimal import Decimal
 
 class CustomUserCreationForm(UserCreationForm):
@@ -29,12 +30,10 @@ class CustomUserCreationForm(UserCreationForm):
         fields = UserCreationForm.Meta.fields + ('email', 'first_name', 'last_name')
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nome de Usuário'}),
-            # Os widgets para senha já são tratados pelo UserCreationForm
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Remove o texto de ajuda padrão do password2 para manter a interface limpa, se desejado
         if 'password2' in self.fields:
             self.fields['password2'].help_text = None
 
@@ -144,13 +143,13 @@ class UserProfileAPIForm(forms.ModelForm):
     )
     binance_api_secret = forms.CharField(
         label=_("Seu Segredo API da Binance (Testnet)"),
-        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Cole seu segredo API aqui', 'render_value': False}), # Alterado render_value para False
+        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Cole seu segredo API aqui', 'render_value': False}),
         required=False, 
         help_text=_("Mantenha seu segredo API seguro. Ele será armazenado aqui (atualmente em texto plano - TODO: Criptografar). Se deixar em branco, o segredo existente não será alterado.")
     )
     preferred_fiat_currency = forms.ChoiceField(
         label=_("Sua Moeda Fiat Preferida"),
-        choices=FIAT_CURRENCY_CHOICES, # CORRIGIDO: Usa a variável importada
+        choices=FIAT_CURRENCY_CHOICES, 
         widget=forms.Select(attrs={'class': 'form-input'}),
         help_text=_("Usada para exibir valores totais e, futuramente, para conversões.")
     )
@@ -161,15 +160,69 @@ class UserProfileAPIForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Para o campo binance_api_secret, é melhor não exibir o valor existente.
-        # Se o usuário quiser mudar, ele digita um novo. Se deixar em branco, não alteramos.
-        # A lógica para isso está no clean_binance_api_secret.
-        # O PasswordInput por padrão (render_value=False) não mostra o valor inicial.
 
     def clean_binance_api_secret(self):
         secret = self.cleaned_data.get('binance_api_secret')
-        # Se o campo do segredo API for deixado em branco durante uma atualização de um perfil existente,
-        # mantenha o valor original do segredo.
         if self.instance and self.instance.pk and not secret:
             return self.instance.binance_api_secret
         return secret
+
+# Formulário para realizar uma ordem de compra a mercado
+class TradeForm(forms.Form):
+    BUY_TYPE_CHOICES = [
+        ('QUANTITY', 'Comprar pela Quantidade da Cripto'),
+        ('QUOTE_QUANTITY', 'Comprar pelo Valor da Moeda de Cotação')
+    ]
+    buy_type = forms.ChoiceField(
+        choices=BUY_TYPE_CHOICES,
+        label=_("Tipo de Compra"),
+        widget=forms.RadioSelect(attrs={'class': 'mr-2'}), # Estilização básica para radio
+        initial='QUANTITY'
+    )
+    cryptocurrency = forms.ModelChoiceField(
+        queryset=Cryptocurrency.objects.all().order_by('name'),
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        label=_("Criptomoeda para Comprar")
+    )
+    quantity = forms.DecimalField(
+        label=_("Quantidade da Cripto (ex: 0.01 BTC)"),
+        min_value=Decimal('0.00000001'), 
+        required=False, # Será condicionalmente obrigatório
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 0.01', 'step': 'any'}),
+        help_text=_("Preencha se 'Comprar pela Quantidade da Cripto' estiver selecionado.")
+    )
+    quote_quantity = forms.DecimalField(
+        label=_("Valor a Gastar (ex: 100 USDT)"),
+        min_value=Decimal('0.01'), # Ajustar conforme MIN_NOTIONAL da Binance (geralmente ~10 USD)
+        required=False, # Será condicionalmente obrigatório
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 100'}),
+        help_text=_("Preencha se 'Comprar pelo Valor da Moeda de Cotação' estiver selecionado. O valor é na moeda de cotação da cripto (ex: USDT, BRL).")
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        buy_type = cleaned_data.get('buy_type')
+        quantity = cleaned_data.get('quantity')
+        quote_quantity = cleaned_data.get('quote_quantity')
+        cryptocurrency = cleaned_data.get('cryptocurrency')
+
+        if buy_type == 'QUANTITY':
+            if not quantity:
+                self.add_error('quantity', _("A quantidade da cripto é obrigatória para este tipo de compra."))
+            if quantity and quantity <= 0:
+                 self.add_error('quantity', _("A quantidade da cripto deve ser positiva."))
+            # Limpar o outro campo para evitar confusão
+            cleaned_data['quote_quantity'] = None
+        elif buy_type == 'QUOTE_QUANTITY':
+            if not quote_quantity:
+                self.add_error('quote_quantity', _("O valor a gastar é obrigatório para este tipo de compra."))
+            if quote_quantity and quote_quantity <= 0:
+                self.add_error('quote_quantity', _("O valor a gastar deve ser positivo."))
+            # Limpar o outro campo
+            cleaned_data['quantity'] = None
+        
+        if not cryptocurrency:
+             self.add_error('cryptocurrency', _("Por favor, selecione uma criptomoeda."))
+
+        return cleaned_data
+
