@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+{% block content %}
+<div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl">
+    <h1 class="text-3xl sm:text-4xl font-bold text-blue-400 mb-6">{{ page_title }}</h1>
+    {% if error_message %}<div class="alert alert-error"><strong class="font-bold">Erro:</strong><span class="block sm:inline">{{ error_message }}</span></div>{% endif %}
+    {% if server_time %}
+        <div class="mb-6 p-4 bg-gray-700 rounded-lg">
+            <h2 class="text-xl font-semibold text-white mb-2">Horário do Servidor Binance:</h2>
+            <pre class="text-green-400 bg-gray-900 p-3 rounded-md overflow-x-auto"><code>{{ server_time }}</code></pre>
+        </div>
+    {% endif %}
+    {% if account_info %}
+        <div class="mb-6 p-4 bg-gray-700 rounded-lg">
+            <h2 class="text-xl font-semibold text-white mb-2">Informações da Conta:</h2>
+            <p class="text-gray-300"><strong>Tipo de Conta:</strong> {{ account_info.accountType }}</p>
+            <p class="text-gray-300"><strong>Pode Negociar:</strong> <span class="{% if account_info.canTrade %}text-green-400{% else %}text-red-400{% endif %}">{{ account_info.canTrade|yesno:"Sim,Não" }}</span></p>
+            <h3 class="text-lg font-semibold text-white mt-4 mb-2">Saldos (Não Zerados):</h3>
+            {% if account_info.balances %}
+                <div class="overflow-x-auto bg-gray-900 p-3 rounded-md">
+                    <table class="min-w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-700"><tr><th scope="col" class="px-4 py-2">Ativo</th><th scope="col" class="px-4 py-2">Livre</th><th scope="col" class="px-4 py-2">Bloqueado</th></tr></thead>
+                        <tbody>
+                            {% for balance in account_info.balances %}<tr class="border-b border-gray-700 hover:bg-gray-600"><td class="px-4 py-2 font-medium text-white">{{ balance.asset }}</td><td class="px-4 py-2">{{ balance.free }}</td><td class="px-4 py-2">{{ balance.locked }}</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}<p class="text-gray-400">Nenhum saldo encontrado ou todos os saldos são zero.</p>{% endif %}
+        </div>
+    {% elif account_info_error %}
+         <div class="mb-6 p-4 bg-gray-700 rounded-lg"><h2 class="text-xl font-semibold text-white mb-2">Informações da Conta:</h2><p class="text-red-400">{{ account_info_error }}</p></div>
+    {% endif %}
+    <div class="mt-8"><a href="{% url 'core:dashboard' %}" class="text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a></div>
+</div>
+{% endblock %}

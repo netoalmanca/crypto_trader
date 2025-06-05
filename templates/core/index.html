@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="text-4xl sm:text-5xl font-extrabold text-blue-400 mb-6 animate-pulse">{{ page_title }}</h1>
+    <p class="text-lg sm:text-xl text-gray-300 mb-10">{{ message }}</p>
+    <div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl max-w-3xl mx-auto">
+        <h2 class="text-2xl sm:text-3xl font-semibold text-white mb-6">O que Vem por Aí:</h2>
+        <ul class="list-disc list-inside text-left text-gray-400 space-y-3 text-base sm:text-lg">
+            <li>Conectar com a API da Binance para buscar dados de mercado em tempo real.</li>
+            <li>Desenvolver o dashboard do usuário com visualização de portfólio e saldos.</li>
+            <li>Criar funcionalidade de compra e venda de criptomoedas.</li>
+            <li>Adicionar gráficos interativos de preços e histórico.</li>
+            <li>Implementar relatórios detalhados de análise de performance.</li>
+            <li>Integrar o Gemini para insights e auxílio em decisões estratégicas.</li>
+        </ul>
+        {% if not user.is_authenticated %}
+        <div class="mt-10 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <a href="{% url 'core:register' %}" class="btn-primary py-3 px-8 text-lg">Crie sua Conta</a>
+            <a href="{% url 'core:login' %}" class="btn-secondary py-3 px-8 text-lg">Acessar Conta</a>
+        </div>
+        {% else %}
+        <div class="mt-10"><a href="{% url 'core:dashboard' %}" class="btn-primary py-3 px-8 text-lg">Acessar meu Dashboard</a></div>
+        {% endif %}
+    </div>
+    <div class="mt-16 p-6 bg-gray-800 rounded-xl shadow-lg">
+        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">Gemini e Tomada de Decisões Inteligentes</h3>
+        <p class="text-gray-400 text-base sm:text-lg leading-relaxed">A futura integração com o Gemini visa transformar a maneira como você interage com o mercado...</p>
+    </div>
+</div>
+{% endblock %}

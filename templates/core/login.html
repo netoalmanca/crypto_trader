@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto mt-4 sm:mt-8 bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.GET.next }}"> 
+        <div class="mb-4">
+            <label for="{{ form.username.id_for_label }}" class="form-label">{{ form.username.label }}</label>
+            {{ form.username }} 
+            {% for error in form.username.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="mb-6"> 
+            <label for="{{ form.password.id_for_label }}" class="form-label">{{ form.password.label }}</label>
+            {{ form.password }} 
+            {% for error in form.password.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+        </div>
+        {% if form.non_field_errors %} 
+             <div class="mb-4 p-3 bg-red-700 bg-opacity-30 rounded-md">
+                {% for error in form.non_field_errors %}<p class="text-sm text-red-300">{{ error }}</p>{% endfor %}
+            </div>
+        {% endif %}
+        <div class="mt-6 sm:mt-8"><button type="submit" class="btn-primary">Entrar</button></div>
+    </form>
+    <p class="mt-6 text-center text-sm text-gray-400">Não tem uma conta? <a href="{% url 'core:register' %}" class="font-medium text-blue-400 hover:text-blue-300">Crie uma agora</a>.</p>
+</div>
+{% endblock %}

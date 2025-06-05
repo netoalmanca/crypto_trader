@@ -1,0 +1,194 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Crypto Trader Pro{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #111827; /* Azul escuro acinzentado */
+            color: #f3f4f6; /* Cinza claro para texto */
+        }
+        .content-wrapper { 
+            min-height: calc(100vh - 8rem); /* Ajustado para footer menor se necessário, ou mantenha 10rem */
+        }
+        /* Estilização da barra de rolagem */
+        ::-webkit-scrollbar { 
+            width: 8px; 
+        }
+        ::-webkit-scrollbar-track { 
+            background: #1f2937; /* Fundo da trilha da barra de rolagem */
+        }
+        ::-webkit-scrollbar-thumb { 
+            background: #3b82f6; /* Cor do polegar da barra de rolagem (Azul Tailwind) */
+            border-radius: 4px; 
+        }
+        ::-webkit-scrollbar-thumb:hover { 
+            background: #2563eb; /* Cor do polegar ao passar o mouse */
+        }
+
+        /* Classes de formulário customizadas (se necessário, além do Tailwind) */
+        .form-input { 
+            @apply w-full px-4 py-2 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white placeholder-gray-400 transition-colors duration-200; 
+        }
+        .form-label { 
+            @apply block mb-2 text-sm font-medium text-gray-300; 
+        }
+        .btn-primary { 
+            @apply w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50; 
+        }
+        .btn-secondary { 
+            @apply w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50; 
+        }
+
+        /* Alertas */
+        .alert { 
+            @apply px-4 py-3 rounded-lg relative mb-4 text-sm shadow-md; 
+        }
+        .alert-success { 
+            @apply bg-green-700 border border-green-800 text-white; 
+        }
+        .alert-error { 
+            @apply bg-red-700 border border-red-800 text-white; 
+        }
+        .alert-info { 
+            @apply bg-blue-700 border border-blue-800 text-white; 
+        }
+        .alert-warning { 
+            @apply bg-yellow-600 border border-yellow-700 text-gray-900; 
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="flex flex-col min-h-screen">
+    <!-- Header Principal -->
+    <header class="bg-gray-800 shadow-lg sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="{% url 'core:index' %}" class="flex-shrink-0 text-white font-bold text-2xl hover:text-blue-400 transition-colors">
+                        CryptoTrader<span class="text-blue-400">Pro</span>
+                    </a>
+                </div>
+
+                <!-- Menu Desktop (Visível em telas médias e maiores) -->
+                <div class="hidden md:flex md:items-center md:space-x-4">
+                    <a href="{% url 'core:index' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Início</a>
+                    <a href="{% url 'core:cryptocurrency_list' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Criptomoedas</a>
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'core:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
+                        <a href="{% url 'core:transaction_history' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Histórico</a>
+                    {% endif %}
+                    <a href="{% url 'admin:index' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Admin</a>
+                </div>
+                <div class="hidden md:flex md:items-center md:ml-6">
+                     {% if user.is_authenticated %}
+                        <span class="text-gray-400 text-sm mr-3">Olá, {{ user.first_name|default:user.username }}!</span>
+                        <a href="{% url 'core:logout' %}" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium">Sair</a>
+                    {% else %}
+                        <a href="{% url 'core:login' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Login</a>
+                        <a href="{% url 'core:register' %}" class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium">Registrar</a>
+                    {% endif %}
+                </div>
+
+                <!-- Botão do Menu Mobile (Visível apenas em telas pequenas) -->
+                <div class="-mr-2 flex md:hidden">
+                    <button type="button" class="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white" aria-controls="mobile-menu" aria-expanded="false" id="mobile-menu-button">
+                        <span class="sr-only">Abrir menu</span>
+                        <!-- Ícone Hambúrguer (aparece quando menu está fechado) -->
+                        <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <!-- Ícone X (aparece quando menu está aberto) -->
+                        <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Conteúdo do Menu Mobile (Oculto por padrão, controlado por JS e classes md:hidden) -->
+        <!-- A classe "hidden" aqui é crucial para o estado inicial -->
+        <div class="md:hidden hidden" id="mobile-menu">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="{% url 'core:index' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Início</a>
+                <a href="{% url 'core:cryptocurrency_list' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Criptomoedas</a>
+                 {% if user.is_authenticated %}
+                    <a href="{% url 'core:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Dashboard</a>
+                    <a href="{% url 'core:transaction_history' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Histórico</a>
+                {% endif %}
+                <a href="{% url 'admin:index' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Admin</a>
+            </div>
+            <div class="pt-4 pb-3 border-t border-gray-700">
+                {% if user.is_authenticated %}
+                    <div class="flex items-center px-5">
+                        <!-- Pode adicionar um avatar/ícone de usuário aqui se desejar -->
+                        <div class="ml-0"> {/* Ajustado de ml-3 para ml-0 se não houver avatar */}
+                            <div class="text-base font-medium leading-none text-white">{{ user.first_name|default:user.username }}</div>
+                            {% if user.email %}<div class="text-sm font-medium leading-none text-gray-400 mt-1">{{ user.email }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="mt-3 px-2 space-y-1">
+                        <a href="{% url 'core:logout' %}" class="block px-3 py-2 rounded-md text-base font-medium text-red-400 hover:text-white hover:bg-red-700">Sair</a>
+                    </div>
+                {% else %}
+                    <div class="px-2 space-y-1">
+                        <a href="{% url 'core:login' %}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">Login</a>
+                        <a href="{% url 'core:register' %}" class="block px-3 py-2 rounded-md text-base font-medium text-blue-400 hover:text-white hover:bg-blue-700">Registrar</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal da Página -->
+    <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 content-wrapper">
+        {% if messages %}
+            <div class="max-w-2xl mx-auto my-4 space-y-2">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-gray-800 text-gray-400 text-center p-6 mt-auto">
+        <p>&copy; {% now "Y" %} Crypto Trader Pro. Todos os direitos reservados.</p>
+        <p>Este é um projeto de demonstração.</p>
+    </footer>
+
+    <!-- Script para o Menu Mobile -->
+    <script>
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const svgsInButton = mobileMenuButton.querySelectorAll('svg');
+
+        mobileMenuButton.addEventListener('click', () => {
+            // Alterna a classe 'hidden' no menu mobile
+            mobileMenu.classList.toggle('hidden');
+
+            // Alterna a visibilidade dos ícones SVG (hambúrguer/X)
+            svgsInButton[0].classList.toggle('hidden'); // Ícone que estava 'block' se torna 'hidden'
+            svgsInButton[0].classList.toggle('block');  // e vice-versa
+
+            svgsInButton[1].classList.toggle('hidden'); // Ícone que estava 'hidden' se torna 'block'
+            svgsInButton[1].classList.toggle('block');  // e vice-versa
+
+            // Atualiza o atributo aria-expanded para acessibilidade
+            const isExpanded = mobileMenu.classList.contains('hidden') ? 'false' : 'true';
+            mobileMenuButton.setAttribute('aria-expanded', isExpanded);
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
