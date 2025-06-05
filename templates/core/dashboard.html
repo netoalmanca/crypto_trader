@@ -27,6 +27,10 @@
                 {{ total_portfolio_value|floatformat:2 }} {{ portfolio_currency }}
             </p>
             <p class="text-xs text-gray-500 mt-1">Baseado nos preços atuais ({{ portfolio_currency }})</p>
+            {# Adicionar um pequeno aviso se a conversão não for totalmente precisa #}
+            {% if show_conversion_warning or show_currency_mismatch_warning %}
+                <p class="text-xs text-yellow-400 mt-1">Atenção: O valor pode não refletir totalmente sua moeda preferida devido a limitações na conversão ou disponibilidade de taxas.</p>
+            {% endif %}
         </div>
         <div class="bg-gray-700 p-6 rounded-lg shadow-lg hover:shadow-blue-500/30 transition-shadow duration-300">
             <h2 class="text-xl font-semibold text-white mb-2">Criptos no Portfólio</h2>
@@ -55,10 +59,10 @@
                         <tr>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Cripto</th>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Quantidade</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Médio Compra</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Atual</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Valor Atual</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Médio Compra ({{ portfolio_currency }})</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Atual ({{ portfolio_currency }})</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Valor Atual ({{ portfolio_currency }})</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P ({{ portfolio_currency }})</th>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P (%)</th>
                         </tr>
                     </thead>
@@ -83,6 +87,8 @@
                                 <p class="text-gray-100 whitespace-no-wrap">{{ item.holding.quantity|floatformat:"-8" }}</p>
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
+                                {# Preço Médio de Compra - Idealmente convertido para a moeda preferida do usuário #}
+                                {# Por agora, mostra na moeda original da cripto, o que pode ser confuso se diferente de portfolio_currency #}
                                 {% if item.holding.average_buy_price is not None %}
                                     <p class="text-gray-300 whitespace-no-wrap">{{ item.holding.average_buy_price|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}</p>
                                 {% else %}
@@ -90,6 +96,8 @@
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
+                                {# Preço Atual - Idealmente convertido para a moeda preferida do usuário #}
+                                {# Por agora, mostra na moeda original da cripto #}
                                 {% if item.holding.cryptocurrency.current_price is not None %}
                                     <p class="text-gray-300 whitespace-no-wrap">{{ item.holding.cryptocurrency.current_price|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}</p>
                                 {% else %}
@@ -97,13 +105,18 @@
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                                {% if item.current_value is not None %}
-                                    <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ item.current_value|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}</p>
+                                {# Valor Atual - Usa current_value_display que tentamos converter #}
+                                {% if item.current_value_display is not None %}
+                                    <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ item.current_value_display|floatformat:2 }} {{ portfolio_currency }}</p>
+                                    {% if item.original_currency != portfolio_currency %}
+                                        <p class="text-xs text-gray-500">(Original: {{ item.holding.current_market_value|floatformat:2 }} {{ item.original_currency }})</p>
+                                    {% endif %}
                                 {% else %}
                                     <p class="text-gray-500 whitespace-no-wrap">N/D</p>
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
+                                {# Lucro/Prejuízo - Idealmente convertido. Atualmente na moeda base da cripto. #}
                                 {% if item.profit_loss is not None %}
                                     <p class="whitespace-no-wrap {% if item.profit_loss > 0 %}text-green-400{% elif item.profit_loss < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
                                         {{ item.profit_loss|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}

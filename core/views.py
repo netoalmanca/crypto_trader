@@ -1,3 +1,4 @@
+# core/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
@@ -10,8 +11,8 @@ from decimal import Decimal
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from django.db import transaction as db_transaction
-import datetime # Adicionado para manipulação de datas
-import json # Adicionado para passar dados para o template de forma segura
+import datetime 
+import json 
 
 # Create your views here.
 
@@ -40,7 +41,6 @@ def register_view(request):
             messages.success(request, f'Conta criada com sucesso para {user.username}! Bem-vindo(a)!')
             return redirect('core:dashboard')
         else:
-            # Coletar e exibir mensagens de erro detalhadas
             for field in form:
                 for error_list in field.errors.as_data():
                     for error in error_list:
@@ -74,7 +74,7 @@ def login_view(request):
                 return redirect(next_page or 'core:dashboard')
             else:
                 messages.error(request, 'Nome de usuário ou senha inválidos.')
-        else: # Erros de formulário
+        else: 
             if form.non_field_errors():
                  for error in form.non_field_errors():
                     messages.error(request, error)
@@ -85,7 +85,7 @@ def login_view(request):
                         for error in error_list:
                             messages.error(request, f"{field.label}: {error.message}")
                             has_field_errors = True
-                if not has_field_errors and not form.non_field_errors(): # Fallback genérico
+                if not has_field_errors and not form.non_field_errors(): 
                      messages.error(request, 'Dados de login inválidos. Verifique e tente novamente.')
     else:
         form = CustomAuthenticationForm()
@@ -109,28 +109,69 @@ def dashboard_view(request):
     """
     try:
         user_profile = UserProfile.objects.get(user=request.user)
-        # Pré-carrega as criptomoedas relacionadas para evitar queries N+1
         holdings_qs = Holding.objects.filter(user_profile=user_profile).select_related('cryptocurrency')
     except UserProfile.DoesNotExist:
         messages.error(request, "Perfil de usuário não encontrado. Um novo perfil foi criado, por favor, tente novamente.")
-        # Cria o perfil se não existir (embora o signal deva cuidar disso)
         UserProfile.objects.get_or_create(user=request.user)
-        return redirect('core:dashboard') # Tenta recarregar o dashboard
+        return redirect('core:dashboard') 
     except Exception as e:
         messages.error(request, f"Ocorreu um erro ao carregar o dashboard: {e}")
         return redirect('core:index')
 
-    total_portfolio_value = Decimal('0.0')
+    total_portfolio_value_in_preferred_currency = Decimal('0.0')
     enriched_holdings = []
+    
+    # Flags para controle de mensagens de aviso no template
+    conversion_warning_shown_for_request = False
+    currency_mismatch_warning_shown_for_request = False
+    
+    client = None
+    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET:
+        try:
+            client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
+        except Exception:
+            client = None 
 
     for holding_item in holdings_qs:
-        current_value = holding_item.current_market_value # Usa a property do modelo
-        if current_value is not None:
-            total_portfolio_value += current_value
+        current_value_in_crypto_price_currency = holding_item.current_market_value 
+        
+        value_in_preferred_currency = None
+        if current_value_in_crypto_price_currency is not None:
+            if holding_item.cryptocurrency.price_currency == user_profile.preferred_fiat_currency:
+                value_in_preferred_currency = current_value_in_crypto_price_currency
+            elif client: 
+                try:
+                    conversion_pair = f"{holding_item.cryptocurrency.price_currency.upper()}{user_profile.preferred_fiat_currency.upper()}"
+                    if holding_item.cryptocurrency.price_currency.upper() == "USDT" and user_profile.preferred_fiat_currency.upper() == "USD":
+                        conversion_rate = Decimal('1.0') 
+                    elif conversion_pair == f"{user_profile.preferred_fiat_currency.upper()}{user_profile.preferred_fiat_currency.upper()}":
+                         conversion_rate = Decimal('1.0') 
+                    else:
+                        ticker = client.get_symbol_ticker(symbol=conversion_pair)
+                        conversion_rate = Decimal(ticker['price'])
+                    
+                    value_in_preferred_currency = current_value_in_crypto_price_currency * conversion_rate
+                except Exception as e:
+                    print(f"Dashboard: Falha ao converter {holding_item.cryptocurrency.price_currency} para {user_profile.preferred_fiat_currency} para {holding_item.cryptocurrency.symbol}. Erro: {e}")
+                    value_in_preferred_currency = current_value_in_crypto_price_currency 
+                    if not conversion_warning_shown_for_request:
+                        messages.warning(request, f"Atenção: Alguns valores podem não estar na sua moeda preferida ({user_profile.preferred_fiat_currency}) devido a falhas na conversão de taxas.")
+                        conversion_warning_shown_for_request = True
+            else: 
+                value_in_preferred_currency = current_value_in_crypto_price_currency
+                if holding_item.cryptocurrency.price_currency != user_profile.preferred_fiat_currency:
+                    if not currency_mismatch_warning_shown_for_request:
+                        messages.warning(request, f"Atenção: O valor total do portfólio pode incluir moedas diferentes de sua preferência ({user_profile.preferred_fiat_currency}) pois o cliente Binance não está disponível para conversão.")
+                        currency_mismatch_warning_shown_for_request = True
+
+        if value_in_preferred_currency is not None:
+            total_portfolio_value_in_preferred_currency += value_in_preferred_currency
+        
         enriched_holdings.append({
             'holding': holding_item,
-            'current_value': current_value,
-            'profit_loss': holding_item.profit_loss,
+            'current_value_display': value_in_preferred_currency, 
+            'original_currency': holding_item.cryptocurrency.price_currency,
+            'profit_loss': holding_item.profit_loss, 
             'profit_loss_percent': holding_item.profit_loss_percent
         })
 
@@ -139,8 +180,11 @@ def dashboard_view(request):
         'user': request.user,
         'user_profile': user_profile,
         'holdings': enriched_holdings,
-        'total_portfolio_value': total_portfolio_value,
-        'portfolio_currency': user_profile.preferred_fiat_currency
+        'total_portfolio_value': total_portfolio_value_in_preferred_currency,
+        'portfolio_currency': user_profile.preferred_fiat_currency,
+        # Passa os flags para o template
+        'show_conversion_warning': conversion_warning_shown_for_request,
+        'show_currency_mismatch_warning': currency_mismatch_warning_shown_for_request,
     }
     return render(request, 'core/dashboard.html', context)
 
@@ -159,7 +203,7 @@ def binance_test_view(request):
         context['error_message'] = "Chaves da API não configuradas."
         return render(request, 'core/binance_test.html', context)
     try:
-        client = Client(api_key, api_secret, tld='com', testnet=use_testnet) # tld='com' é comum
+        client = Client(api_key, api_secret, tld='com', testnet=use_testnet) 
         messages.info(request, f"Conectando à {'Testnet' if use_testnet else 'API Principal'} da Binance...")
 
         server_time = client.get_server_time()
@@ -176,7 +220,7 @@ def binance_test_view(request):
 
     except BinanceAPIException as e:
         error_msg = f"Erro API Binance: {e.message} (Cod: {e.code})"
-        if e.code == -2015: # Invalid API-key, IP, or permissions for action
+        if e.code == -2015: 
              error_msg = f"Chave API/Secret inválida ou permissões insuficientes para esta ação. Verifique as permissões da chave na Binance. (Erro: {e.message})"
         messages.error(request, error_msg)
         context['error_message'] = error_msg
@@ -202,52 +246,44 @@ def cryptocurrency_list_view(request):
         try:
             client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
             client_initialized_successfully = True
-            # messages.info(request, "Cliente Binance inicializado para atualização de preços.") # Removido para reduzir mensagens verbosas na UI
         except Exception as e:
             messages.error(request, f"Falha ao inicializar o cliente da Binance para atualização de preços: {e}")
-            print(f"Falha ao inicializar o cliente da Binance: {e}") # Log no console
+            print(f"Falha ao inicializar o cliente da Binance: {e}") 
     else:
         messages.warning(request, "Chaves API da Binance não configuradas. Os preços não serão atualizados da API.")
-        print("Chaves API da Binance não configuradas. Os preços não serão atualizados da API.") # Log no console
+        print("Chaves API da Binance não configuradas. Os preços não serão atualizados da API.")
 
     cryptos_from_db = Cryptocurrency.objects.all()
     updated_cryptos = []
     prices_updated_count = 0
 
     for crypto in cryptos_from_db:
-        if client_initialized_successfully and client: # Procede apenas se o cliente foi inicializado com sucesso
+        if client_initialized_successfully and client: 
             try:
                 api_symbol = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
-                # print(f"Tentando buscar preço para o par: {api_symbol}") # Log no console para debug
                 
                 ticker = client.get_symbol_ticker(symbol=api_symbol)
                 
                 if ticker and 'price' in ticker:
-                    # old_price = crypto.current_price # Descomente se quiser mostrar a mudança na mensagem
                     crypto.current_price = Decimal(ticker['price'])
                     crypto.last_updated = timezone.now()
-                    crypto.save() # Salva a atualização no banco de dados
+                    crypto.save() 
                     prices_updated_count += 1
-                    # messages.success(request, f"Preço de {crypto.symbol} ({api_symbol}) atualizado para {crypto.current_price}.")
                 else:
-                    # print(f"Ticker não encontrado ou sem preço para {crypto.symbol} ({api_symbol}) na Binance.")
                     pass
             
             except BinanceAPIException as e:
-                # Código -1121: Invalid symbol.
-                # Não mostrar mensagem de erro para cada símbolo inválido na UI para não poluir.
-                # Logar no console é suficiente para o administrador verificar.
                 print(f"API Erro (Símbolo: {api_symbol}): {e.message} (Cod: {e.code})")
             
             except BinanceRequestException as e:
                 print(f"Request Erro (Símbolo: {api_symbol}): {e.message}")
-                messages.error(request, f"Erro de requisição à Binance ao tentar buscar preços. Tente mais tarde.") # Mensagem genérica
+                messages.error(request, f"Erro de requisição à Binance ao tentar buscar preços. Tente mais tarde.") 
             
-            except Exception as e: # Outros erros inesperados
+            except Exception as e: 
                 print(f"Erro inesperado (Símbolo: {api_symbol}): {str(e)}")
-                messages.error(request, f"Ocorreu um erro inesperado ao tentar atualizar os preços.") # Mensagem genérica
+                messages.error(request, f"Ocorreu um erro inesperado ao tentar atualizar os preços.") 
         
-        updated_cryptos.append(crypto) # Adiciona à lista, mesmo que não atualizado
+        updated_cryptos.append(crypto) 
 
     if client_initialized_successfully and prices_updated_count > 0 :
         messages.success(request, f"{prices_updated_count} preço(s) de criptomoeda(s) foram atualizados da API da Binance.")
@@ -257,7 +293,7 @@ def cryptocurrency_list_view(request):
 
     context = {
         'page_title': 'Lista de Criptomoedas',
-        'cryptocurrencies': updated_cryptos, # Usa a lista que tentamos atualizar
+        'cryptocurrencies': updated_cryptos, 
     }
     return render(request, 'core/cryptocurrency_list.html', context)
 
@@ -266,59 +302,47 @@ def cryptocurrency_detail_view(request, symbol):
     """
     View para exibir detalhes de uma criptomoeda e seu gráfico de histórico de preços.
     """
-    crypto = get_object_or_404(Cryptocurrency, symbol__iexact=symbol) # __iexact para case-insensitive
+    crypto = get_object_or_404(Cryptocurrency, symbol__iexact=symbol) 
     
-    klines_data_json = "[]" # Default para array JSON vazio, caso não consiga buscar os dados
-    chart_error_message = None # Mensagem de erro específica para o gráfico
+    klines_data_json = "[]" 
+    chart_error_message = None 
 
     if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET:
         try:
             client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
             
-            # Forma o par para a API, ex: BTCUSDT
-            # Usa crypto.price_currency que foi configurada no admin e usada para buscar o ticker.
             api_symbol_pair = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
             
-            # Busca dados históricos (ex: últimos 90 dias, velas diárias)
-            end_time = datetime.datetime.now(datetime.timezone.utc) # Agora
-            start_time = end_time - datetime.timedelta(days=90) # 90 dias atrás
+            end_time = datetime.datetime.now(datetime.timezone.utc) 
+            start_time = end_time - datetime.timedelta(days=90) 
 
-            # A API espera timestamps em milissegundos ou strings de data "humanas"
             start_ts_ms_str = str(int(start_time.timestamp() * 1000))
             
-            # Nota: A Binance retorna no máximo 1000 klines por chamada.
-            # Para períodos mais longos ou intervalos menores, pode ser necessário fazer múltiplas chamadas.
             klines = client.get_historical_klines(
                 api_symbol_pair,
-                Client.KLINE_INTERVAL_1DAY, # Intervalo da vela (1 dia)
+                Client.KLINE_INTERVAL_1DAY, 
                 start_str=start_ts_ms_str
-                # end_str pode ser omitido para pegar até o mais recente, ou especificado se necessário
             )
             
-            # Processa os dados para o gráfico:
-            # Chart.js geralmente precisa de labels (datas) e datasets (preços de fechamento)
             chart_labels = []
             chart_data_close = []
             
-            if not klines: # Verifica se a lista de klines está vazia
+            if not klines: 
                 chart_error_message = f"Nenhum dado histórico encontrado para {api_symbol_pair} no período solicitado."
                 messages.warning(request, chart_error_message)
             else:
                 for kline_entry in klines:
-                    # kline_entry[0] é o timestamp de abertura da vela (em ms)
-                    # kline_entry[4] é o preço de fechamento da vela
                     dt_object = datetime.datetime.fromtimestamp(kline_entry[0]/1000, tz=datetime.timezone.utc)
-                    chart_labels.append(dt_object.strftime('%Y-%m-%d')) # Formata a data como YYYY-MM-DD
-                    chart_data_close.append(str(Decimal(kline_entry[4]))) # Converte para string para JSON
+                    chart_labels.append(dt_object.strftime('%Y-%m-%d')) 
+                    chart_data_close.append(str(Decimal(kline_entry[4]))) 
 
-                # Prepara os dados para serem passados como JSON para o template
                 klines_data_for_template = {
                     'labels': chart_labels,
                     'data': chart_data_close,
-                    'symbol': crypto.symbol, # Para o label do gráfico
-                    'price_currency': crypto.price_currency # Para o label do eixo Y e tooltip
+                    'symbol': crypto.symbol, 
+                    'price_currency': crypto.price_currency 
                 }
-                klines_data_json = json.dumps(klines_data_for_template) # Converte o dicionário para uma string JSON
+                klines_data_json = json.dumps(klines_data_for_template) 
 
                 messages.success(request, f"Dados históricos para o gráfico de {api_symbol_pair} carregados com sucesso.")
 
@@ -326,7 +350,7 @@ def cryptocurrency_detail_view(request, symbol):
             chart_error_message = f"Erro da API Binance ao buscar dados históricos para {crypto.symbol} (par: {api_symbol_pair}): {e.message}. Verifique se o par é válido."
             messages.error(request, chart_error_message)
             print(f"Erro API Binance (histórico para {api_symbol_pair}): {e.message} (Cod: {e.code})")
-        except Exception as e: # Outros erros (rede, etc.)
+        except Exception as e: 
             chart_error_message = f"Erro inesperado ao buscar dados históricos para {crypto.symbol}: {str(e)}"
             messages.error(request, chart_error_message)
             print(f"Erro inesperado (histórico para {api_symbol_pair}): {str(e)}")
@@ -337,14 +361,14 @@ def cryptocurrency_detail_view(request, symbol):
     context = {
         'page_title': f"Detalhes de {crypto.name} ({crypto.symbol})",
         'crypto': crypto,
-        'klines_data_json': klines_data_json, # Passa a string JSON para o template
-        'chart_error_message': chart_error_message, # Passa a mensagem de erro, se houver
+        'klines_data_json': klines_data_json, 
+        'chart_error_message': chart_error_message, 
     }
     return render(request, 'core/cryptocurrency_detail.html', context)
 
 
 @login_required
-@db_transaction.atomic # Garante que as operações no BD sejam atômicas
+@db_transaction.atomic 
 def add_transaction_view(request):
     """
     View para adicionar uma nova transação manual (compra ou venda).
@@ -379,21 +403,20 @@ def add_transaction_view(request):
 
                 elif transaction.transaction_type == 'SELL':
                     holding.quantity -= transaction.quantity_crypto
-                    if holding.quantity < 0: # Validação adicional, embora o form deva tratar
+                    if holding.quantity < 0: 
                         messages.error(request, "Erro: Tentativa de vender mais do que possui. Transação não registrada.")
-                        raise ValueError("Quantidade em holding não pode ser negativa após a venda.") # Força rollback
+                        raise ValueError("Quantidade em holding não pode ser negativa após a venda.") 
                     if holding.quantity == 0:
-                        holding.average_buy_price = Decimal('0.0') # Opcional: zera o preço médio se não houver mais holding
+                        holding.average_buy_price = Decimal('0.0') 
 
                 holding.save()
                 messages.success(request, f"Transação de {transaction.get_transaction_type_display()} de {transaction.cryptocurrency.symbol} registrada com sucesso!")
-                return redirect('core:transaction_history') # Redireciona para o histórico após sucesso
-            except ValueError as ve: # Captura o ValueError de holding negativo
+                return redirect('core:transaction_history') 
+            except ValueError as ve: 
                  messages.error(request, str(ve))
-                 # Não redireciona, permite ao usuário ver o erro no formulário se necessário
             except Exception as e:
                 messages.error(request, f"Ocorreu um erro grave ao processar a transação: {e}")
-        else: # Formulário inválido
+        else: 
             for field, errors in form.errors.items():
                 for error in errors:
                     field_label = form.fields[field].label if field != '__all__' and field in form.fields else "Erro geral do formulário"
@@ -414,16 +437,14 @@ def transaction_history_view(request):
     """
     try:
         user_profile = UserProfile.objects.get(user=request.user)
-        # Ordena por data da transação (mais recente primeiro) e depois por timestamp de criação
         transactions = Transaction.objects.filter(user_profile=user_profile).select_related('cryptocurrency').order_by('-transaction_date', '-timestamp')
-        # Implementar paginação aqui se a lista puder ficar muito longa
     except UserProfile.DoesNotExist:
         messages.error(request, "Perfil de usuário não encontrado.")
-        return redirect('core:index') # Ou dashboard, se fizer mais sentido
+        return redirect('core:index') 
 
     context = {
         'page_title': 'Histórico de Transações',
         'transactions': transactions,
-        'user_profile': user_profile, # Pode ser útil no template
+        'user_profile': user_profile, 
     }
     return render(request, 'core/transaction_history.html', context)
