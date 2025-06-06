@@ -12,6 +12,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS_STRING = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',') if host.strip()]
 
+# Chave para criptografia de campos sensíveis no banco de dados
+FIELD_ENCRYPTION_KEY = os.environ.get('DJANGO_FIELD_ENCRYPTION_KEY')
+if not FIELD_ENCRYPTION_KEY and not DEBUG:
+    raise ValueError("A variável de ambiente DJANGO_FIELD_ENCRYPTION_KEY deve ser definida em produção.")
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -20,8 +25,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core.apps.CoreConfig',
-    # Adicionar 'django_celery_beat' se for usar o agendador do BD,
-    # mas para agendamento simples, a configuração no settings é suficiente.
 ]
 
 MIDDLEWARE = [
@@ -53,7 +56,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'crypto_trader.wsgi.application'
-ASGI_APPLICATION = 'crypto_trader.asgi.application' # Adicionado para compatibilidade futura com Celery 5+
+ASGI_APPLICATION = 'crypto_trader.asgi.application'
 
 DATABASES = {
     'default': {
@@ -70,10 +73,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'pt-br'
-TIME_ZONE = 'America/Sao_Paulo' # Importante para Celery Beat
+TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 USE_L10N = True
-USE_TZ = True # Importante para Celery Beat
+USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -83,32 +86,28 @@ BINANCE_API_SECRET = os.environ.get('BINANCE_API_SECRET')
 BINANCE_TESTNET_STR = os.environ.get('BINANCE_TESTNET', 'False')
 BINANCE_TESTNET = BINANCE_TESTNET_STR.lower() in ['true', '1', 't']
 
-LOGIN_URL = 'core:login' 
-LOGIN_REDIRECT_URL = 'core:dashboard' 
+LOGIN_URL = 'core:login'
+LOGIN_REDIRECT_URL = 'core:dashboard'
 LOGOUT_REDIRECT_URL = 'core:index'
 
 # --- Configurações do Celery ---
-# URL do Broker (Redis neste caso). Se o Redis estiver rodando localmente na porta padrão:
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-# URL do Backend de Resultados (opcional, mas útil para rastrear o status das tarefas)
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE # Usa o mesmo timezone do Django
-CELERY_TASK_TRACK_STARTED = True # Para que as tarefas reportem o estado 'STARTED'
-CELERY_TASK_TIME_LIMIT = 30 * 60 # Limite de tempo para tarefas (30 minutos)
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
 
 # --- Configurações do Celery Beat (Agendador) ---
 CELERY_BEAT_SCHEDULE = {
-    'update-crypto-prices-every-minute': { # Nome da tarefa alterado para refletir a frequência
-        'task': 'core.tasks.update_all_cryptocurrency_prices', # Caminho para a sua tarefa
-        'schedule': 60.0,  # Executar a cada 60 segundos (1 minuto)
+    'update-crypto-prices-every-minute': {
+        'task': 'core.tasks.update_all_cryptocurrency_prices',
+        'schedule': 60.0,
     },
-    'update-exchange-rates-every-minute': { # Nome da tarefa alterado e frequência
-        'task': 'core.tasks.update_exchange_rates', # Caminho para a nova tarefa
-        'schedule': 60.0,  # Executar a cada 60 segundos (1 minuto)
+    'update-exchange-rates-every-minute': {
+        'task': 'core.tasks.update_exchange_rates',
+        'schedule': 60.0,
     },
 }
-# Se você usar django-celery-beat (para agendamento via Admin), adicione:
-# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

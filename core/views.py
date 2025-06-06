@@ -21,7 +21,7 @@ from django.db import transaction as db_transaction
 import datetime 
 import json 
 
-# --- Helper Function para ajustar quantidade ao LOT_SIZE ---
+# --- Helper Function ---
 def adjust_quantity_to_lot_size(quantity_str, step_size_str):
     quantity = Decimal(quantity_str)
     step_size = Decimal(step_size_str)
@@ -35,7 +35,8 @@ def adjust_quantity_to_lot_size(quantity_str, step_size_str):
     adjusted_quantity = (quantity / step_size).to_integral_value(rounding=ROUND_DOWN) * step_size
     return adjusted_quantity.quantize(Decimal('1e-' + str(precision)), rounding=ROUND_DOWN)
 
-# ... (views anteriores: index_view, register_view, etc.) ...
+
+# --- Auth & Main Views ---
 def index_view(request):
     context = {
         'page_title': 'Bem-vindo ao Crypto Trader',
@@ -181,7 +182,6 @@ def dashboard_view(request):
             elif current_value_pref > Decimal('0'):
                 profit_loss_percent = Decimal('Inf') 
 
-        # CORREÇÃO: Calcula o preço médio de compra na moeda de exibição.
         average_buy_price_display = None
         if holding_item.quantity > 0 and cost_basis_pref is not None:
             average_buy_price_display = cost_basis_pref / holding_item.quantity
@@ -191,7 +191,7 @@ def dashboard_view(request):
         
         enriched_holdings.append({
             'holding': holding_item,
-            'average_buy_price_display': average_buy_price_display, # Adicionado e calculado na view
+            'average_buy_price_display': average_buy_price_display,
             'current_price_display': current_price_pref,
             'current_value_display': current_value_pref, 
             'profit_loss_display': profit_loss_pref,
@@ -213,7 +213,6 @@ def dashboard_view(request):
     }
     return render(request, 'core/dashboard.html', context)
 
-# ... (outras views: binance_test_view, cryptocurrency_list_view, etc. até o final) ...
 
 @login_required
 def binance_test_view(request):
@@ -474,12 +473,16 @@ def update_api_keys_view(request):
     }
     return render(request, 'core/profile_api_keys.html', context)
 
+
 @login_required
 def trade_market_buy_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
+    
+    api_key = user_profile.binance_api_key
+    api_secret = user_profile.binance_api_secret
 
-    if not user_profile.binance_api_key or not user_profile.binance_api_secret:
-        messages.error(request, "Suas chaves API da Binance não estão configuradas. Por favor, configure-as em seu perfil antes de negociar.")
+    if not api_key or not api_secret or api_key == 'DECRYPTION_FAILED' or api_secret == 'DECRYPTION_FAILED':
+        messages.error(request, "Suas chaves API da Binance não estão configuradas ou não puderam ser lidas. Por favor, configure-as novamente em seu perfil antes de negociar.")
         return redirect('core:update_api_keys')
 
     if request.method == 'POST':
@@ -493,7 +496,7 @@ def trade_market_buy_view(request):
             api_symbol_pair = f"{crypto_to_buy.symbol.upper()}{crypto_to_buy.price_currency.upper()}"
 
             try:
-                client = Client(user_profile.binance_api_key, user_profile.binance_api_secret, tld='com', testnet=True)
+                client = Client(api_key, api_secret, tld='com', testnet=True)
                 
                 symbol_info = client.get_symbol_info(api_symbol_pair)
                 lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
@@ -621,8 +624,11 @@ def trade_market_buy_view(request):
 def trade_market_sell_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
 
-    if not user_profile.binance_api_key or not user_profile.binance_api_secret:
-        messages.error(request, "Suas chaves API da Binance não estão configuradas. Por favor, configure-as em seu perfil antes de negociar.")
+    api_key = user_profile.binance_api_key
+    api_secret = user_profile.binance_api_secret
+
+    if not api_key or not api_secret or api_key == 'DECRYPTION_FAILED' or api_secret == 'DECRYPTION_FAILED':
+        messages.error(request, "Suas chaves API da Binance não estão configuradas ou não puderam ser lidas. Por favor, configure-as novamente em seu perfil antes de negociar.")
         return redirect('core:update_api_keys')
 
     if request.method == 'POST':
@@ -636,7 +642,7 @@ def trade_market_sell_view(request):
             api_symbol_pair = f"{crypto_to_sell.symbol.upper()}{crypto_to_sell.price_currency.upper()}"
 
             try:
-                client = Client(user_profile.binance_api_key, user_profile.binance_api_secret, tld='com', testnet=True)
+                client = Client(api_key, api_secret, tld='com', testnet=True)
                 
                 symbol_info = client.get_symbol_info(api_symbol_pair)
                 lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
@@ -773,101 +779,4 @@ def trade_market_sell_view(request):
         'form': form,
         'page_title': 'Vender Criptomoeda (Ordem a Mercado - Testnet)'
     }
-    return render(request, 'core/trade_sell_form.html', context) 
-
-@login_required
-@db_transaction.atomic 
-def add_transaction_view(request):
-    user_profile = get_object_or_404(UserProfile, user=request.user)
-    if request.method == 'POST':
-        form = TransactionForm(request.POST, user_profile=user_profile)
-        if form.is_valid():
-            try:
-                transaction = form.save(commit=False)
-                transaction.user_profile = user_profile
-                transaction.save()
-
-                holding, created = Holding.objects.get_or_create(
-                    user_profile=user_profile,
-                    cryptocurrency=transaction.cryptocurrency,
-                    defaults={'average_buy_price': Decimal('0.0'), 'quantity': Decimal('0.0')}
-                )
-
-                if transaction.transaction_type == 'BUY':
-                    current_transaction_cost = transaction.quantity_crypto * transaction.price_per_unit
-                    old_total_cost = holding.quantity * (holding.average_buy_price if holding.average_buy_price is not None else Decimal('0.0'))
-                    new_total_quantity = holding.quantity + transaction.quantity_crypto
-                    new_total_cost = old_total_cost + current_transaction_cost
-
-                    if new_total_quantity > 0:
-                        holding.average_buy_price = new_total_cost / new_total_quantity
-                    else: 
-                        holding.average_buy_price = Decimal('0.0')
-                    holding.quantity = new_total_quantity
-
-                elif transaction.transaction_type == 'SELL':
-                    holding.quantity -= transaction.quantity_crypto
-                    if holding.quantity < 0: 
-                        messages.error(request, "Erro: Tentativa de vender mais do que possui. Transação não registrada.")
-                        raise ValueError("Quantidade em holding não pode ser negativa após a venda.") 
-                    if holding.quantity == 0:
-                        holding.average_buy_price = Decimal('0.0') 
-
-                holding.save()
-                messages.success(request, f"Transação de {transaction.get_transaction_type_display()} de {transaction.cryptocurrency.symbol} registrada com sucesso!")
-                return redirect('core:transaction_history') 
-            except ValueError as ve: 
-                 messages.error(request, str(ve))
-            except Exception as e:
-                messages.error(request, f"Ocorreu um erro grave ao processar a transação: {e}")
-        else: 
-            for field, errors in form.errors.items():
-                for error in errors:
-                    field_label = form.fields[field].label if field != '__all__' and field in form.fields else "Erro geral do formulário"
-                    messages.error(request, f"{field_label}: {error}")
-    else:
-        form = TransactionForm(user_profile=user_profile)
-
-    context = {
-        'form': form,
-        'page_title': 'Adicionar Nova Transação'
-    }
-    return render(request, 'core/add_transaction.html', context)
-
-@login_required
-def transaction_history_view(request):
-    try:
-        user_profile = UserProfile.objects.get(user=request.user)
-        transactions = Transaction.objects.filter(user_profile=user_profile).select_related('cryptocurrency').order_by('-transaction_date', '-timestamp')
-    except UserProfile.DoesNotExist:
-        messages.error(request, "Perfil de usuário não encontrado.")
-        return redirect('core:index') 
-
-    context = {
-        'page_title': 'Histórico de Transações',
-        'transactions': transactions,
-        'user_profile': user_profile, 
-    }
-    return render(request, 'core/transaction_history.html', context)
-
-@login_required
-def update_api_keys_view(request):
-    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
-
-    if request.method == 'POST':
-        form = UserProfileAPIForm(request.POST, instance=user_profile)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Suas configurações de API e preferências foram atualizadas com sucesso!')
-            return redirect('core:dashboard') 
-        else:
-            messages.error(request, 'Por favor, corrija os erros abaixo.')
-    else:
-        form = UserProfileAPIForm(instance=user_profile)
-
-    context = {
-        'form': form,
-        'page_title': 'Configurar Chaves API e Preferências'
-    }
-    return render(request, 'core/profile_api_keys.html', context)
-
+    return render(request, 'core/trade_sell_form.html', context)
