@@ -17,7 +17,7 @@ class Cryptocurrency(models.Model):
     name = models.CharField(max_length=100, help_text="Nome completo da criptomoeda (ex: Bitcoin)")
     logo_url = models.URLField(max_length=255, blank=True, null=True, help_text="URL do logo da criptomoeda")
     current_price = models.DecimalField( 
-        max_digits=20, decimal_places=8, null=True, blank=True, # Aumentado decimal_places para acomodar diferentes moedas
+        max_digits=20, decimal_places=8, null=True, blank=True, # Aumentado decimal_places para maior precisão
         help_text="Preço atual na moeda definida em 'Moeda do Preço', atualizado periodicamente"
     )
     price_currency = models.CharField(
@@ -39,28 +39,27 @@ class Cryptocurrency(models.Model):
     def __str__(self):
         price_display = ""
         if self.current_price is not None: 
-            # Usa o novo método para formatação dinâmica de decimais
             price_display = f" - {self.current_price:.{self.get_price_decimals()}f} {self.price_currency}" 
         return f"{self.name} ({self.symbol}){price_display}"
 
     def get_price_decimals(self):
         """
         Retorna o número de casas decimais apropriado para exibir o preço
-        desta criptomoeda. Moedas de baixo valor podem precisar de mais casas decimais.
+        desta criptomoeda, com base no seu valor.
         """
         if self.current_price is not None:
-            if self.current_price < Decimal('0.001'):
-                return 8 # Para moedas de valor muito baixo (ex: SHIB)
-            elif self.current_price < Decimal('1.0'):
-                return 4 # Para moedas de valor baixo/médio
-        return 2 # Padrão para a maioria das moedas (ex: BTC, ETH em USD/USDT/BRL)
-
+            if self.current_price < Decimal('0.0001'): # Para moedas de valor muito baixo
+                return 8
+            elif self.current_price < Decimal('1'): # Para moedas de valor baixo
+                return 4 
+            elif self.current_price < Decimal('100'): # Para moedas de valor médio
+                return 2 
+        return 2 # Padrão para a maioria das moedas de valor mais alto (ex: BTC)
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-    # TODO: Revisitar a criptografia das chaves API quando uma biblioteca compatível estiver disponível.
-    binance_api_key = models.CharField(max_length=255, blank=True, null=True, help_text="Chave da API da Binance")
-    binance_api_secret = models.CharField(max_length=255, blank=True, null=True, help_text="Segredo da API da Binance")
+    binance_api_key = models.CharField(max_length=255, blank=True, null=True, help_text="Chave da API da Binance") # TODO: Criptografar
+    binance_api_secret = models.CharField(max_length=255, blank=True, null=True, help_text="Segredo da API da Binance") # TODO: Criptografar
     preferred_fiat_currency = models.CharField(
         max_length=5,
         choices=FIAT_CURRENCY_CHOICES,

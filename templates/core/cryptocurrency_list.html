@@ -10,7 +10,7 @@
         <h1 class="text-3xl sm:text-4xl font-bold text-blue-400">{{ page_title }}</h1>
     </div>
 
-    {% if cryptocurrencies_data %} {# CORRIGIDO: Usa cryptocurrencies_data #}
+    {% if cryptocurrencies_data %}
         <div class="overflow-x-auto rounded-lg shadow">
             <table class="min-w-full leading-normal">
                 <thead class="bg-gray-700">
@@ -27,7 +27,7 @@
                     </tr>
                 </thead>
                 <tbody class="bg-gray-750">
-                    {% for crypto_data_item in cryptocurrencies_data %} {# CORRIGIDO: Itera sobre cryptocurrencies_data #}
+                    {% for crypto_data_item in cryptocurrencies_data %}
                     <tr class="hover:bg-gray-600 transition-colors duration-150">
                         <td class="px-3 py-4 border-b border-gray-600 text-sm">
                             {% if crypto_data_item.logo_url %}
