@@ -13,16 +13,15 @@ from .forms import (
     TradeForm,
     MarketSellForm 
 )
-from .models import Cryptocurrency, UserProfile, Holding, Transaction # Importa modelos
+from .models import Cryptocurrency, UserProfile, Holding, Transaction, ExchangeRate, BASE_RATE_CURRENCY
 from decimal import Decimal, ROUND_DOWN, ROUND_UP, InvalidOperation
-from binance.client import Client # Importa cliente Binance, pode ser removido se não usado diretamente aqui
+from binance.client import Client 
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from django.db import transaction as db_transaction
 import datetime 
 import json 
 
 # --- Helper Function para ajustar quantidade ao LOT_SIZE ---
-# (Permanece a mesma)
 def adjust_quantity_to_lot_size(quantity_str, step_size_str):
     quantity = Decimal(quantity_str)
     step_size = Decimal(step_size_str)
@@ -116,76 +115,105 @@ def dashboard_view(request):
         user_profile, created = UserProfile.objects.get_or_create(user=request.user)
         holdings_qs = Holding.objects.filter(user_profile=user_profile).select_related('cryptocurrency')
     except Exception as e: 
-        messages.error(request, f"Ocorreu um erro ao carregar o dashboard: {e}")
+        messages.error(request, f"Ocorreu um erro ao carregar dados do perfil ou das posses: {e}")
         return redirect('core:index')
 
-    total_portfolio_value_in_preferred_currency = Decimal('0.0')
+    total_portfolio_value_pref_currency = Decimal('0.0')
     enriched_holdings = []
     
-    conversion_warning_shown_for_request = False
-    currency_mismatch_warning_shown_for_request = False
-    
-    client = None
-    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET: 
-        try:
-            client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
-        except Exception:
-            client = None 
+    exchange_rates_from_base = {rate.to_currency: rate.rate for rate in ExchangeRate.objects.filter(from_currency=BASE_RATE_CURRENCY)}
+    exchange_rates_from_base[BASE_RATE_CURRENCY] = Decimal('1.0')
+
+    conversion_issues_warning_flag = False
 
     for holding_item in holdings_qs:
-        current_value_in_crypto_price_currency = holding_item.current_market_value 
-        
-        value_in_preferred_currency = None
-        if current_value_in_crypto_price_currency is not None:
-            if holding_item.cryptocurrency.price_currency == user_profile.preferred_fiat_currency:
-                value_in_preferred_currency = current_value_in_crypto_price_currency
-            elif client: 
-                try:
-                    conversion_pair = f"{holding_item.cryptocurrency.price_currency.upper()}{user_profile.preferred_fiat_currency.upper()}"
-                    if holding_item.cryptocurrency.price_currency.upper() == "USDT" and user_profile.preferred_fiat_currency.upper() == "USD":
-                        conversion_rate = Decimal('1.0') 
-                    elif conversion_pair == f"{user_profile.preferred_fiat_currency.upper()}{user_profile.preferred_fiat_currency.upper()}": 
-                         conversion_rate = Decimal('1.0') 
-                    else:
-                        ticker = client.get_symbol_ticker(symbol=conversion_pair)
-                        conversion_rate = Decimal(ticker['price'])
-                    
-                    value_in_preferred_currency = current_value_in_crypto_price_currency * conversion_rate
-                except Exception as e:
-                    print(f"Dashboard: Falha ao converter {holding_item.cryptocurrency.price_currency} para {user_profile.preferred_fiat_currency} para {holding_item.cryptocurrency.symbol}. Erro: {e}")
-                    value_in_preferred_currency = current_value_in_crypto_price_currency 
-                    if not conversion_warning_shown_for_request:
-                        messages.warning(request, f"Atenção: Alguns valores podem não estar na sua moeda preferida ({user_profile.preferred_fiat_currency}) devido a falhas na conversão de taxas.")
-                        conversion_warning_shown_for_request = True
-            else: 
-                value_in_preferred_currency = current_value_in_crypto_price_currency
-                if holding_item.cryptocurrency.price_currency != user_profile.preferred_fiat_currency:
-                    if not currency_mismatch_warning_shown_for_request:
-                        messages.warning(request, f"Atenção: O valor total do portfólio pode incluir moedas diferentes de sua preferência ({user_profile.preferred_fiat_currency}) pois o cliente Binance não está disponível para conversão.")
-                        currency_mismatch_warning_shown_for_request = True
+        crypto = holding_item.cryptocurrency
+        pref_currency = user_profile.preferred_fiat_currency
 
-        if value_in_preferred_currency is not None:
-            total_portfolio_value_in_preferred_currency += value_in_preferred_currency
+        cost_basis_orig = holding_item.cost_basis
+        current_value_orig = holding_item.current_market_value
+        avg_buy_price_orig = holding_item.average_buy_price
+        current_price_orig = crypto.current_price
+        
+        cost_basis_base = cost_basis_orig
+        current_value_base = current_value_orig
+        avg_buy_price_base = avg_buy_price_orig
+        current_price_base = current_price_orig
+
+        if crypto.price_currency != BASE_RATE_CURRENCY:
+            rate_USDT_to_crypto_currency = exchange_rates_from_base.get(crypto.price_currency)
+            if rate_USDT_to_crypto_currency and rate_USDT_to_crypto_currency > 0:
+                if cost_basis_base is not None: cost_basis_base /= rate_USDT_to_crypto_currency
+                if current_value_base is not None: current_value_base /= rate_USDT_to_crypto_currency
+                if avg_buy_price_base is not None: avg_buy_price_base /= rate_USDT_to_crypto_currency
+                if current_price_base is not None: current_price_base /= rate_USDT_to_crypto_currency
+            else:
+                print(f"Dashboard: Taxa de conversão de {crypto.price_currency} para {BASE_RATE_CURRENCY} não encontrada para {crypto.symbol}.")
+                conversion_issues_warning_flag = True
+                cost_basis_base, current_value_base, avg_buy_price_base, current_price_base = None, None, None, None
+
+        cost_basis_pref = cost_basis_base
+        current_value_pref = current_value_base
+        avg_buy_price_pref = avg_buy_price_base
+        current_price_pref = current_price_base
+        display_currency_for_item = BASE_RATE_CURRENCY
+
+        if pref_currency != BASE_RATE_CURRENCY and cost_basis_base is not None:
+            rate_USDT_to_pref = exchange_rates_from_base.get(pref_currency)
+            if rate_USDT_to_pref:
+                if cost_basis_pref is not None: cost_basis_pref *= rate_USDT_to_pref
+                if current_value_pref is not None: current_value_pref *= rate_USDT_to_pref
+                if avg_buy_price_pref is not None: avg_buy_price_pref *= rate_USDT_to_pref
+                if current_price_pref is not None: current_price_pref *= rate_USDT_to_pref
+                display_currency_for_item = pref_currency
+            else:
+                print(f"Dashboard: Taxa de conversão de {BASE_RATE_CURRENCY} para {pref_currency} não encontrada.")
+                conversion_issues_warning_flag = True
+        elif pref_currency == BASE_RATE_CURRENCY:
+             display_currency_for_item = BASE_RATE_CURRENCY
+
+        profit_loss_pref = None
+        profit_loss_percent = None
+        if current_value_pref is not None and cost_basis_pref is not None:
+            profit_loss_pref = current_value_pref - cost_basis_pref
+            if cost_basis_pref > Decimal('0'):
+                profit_loss_percent = (profit_loss_pref / cost_basis_pref) * Decimal('100')
+            elif current_value_pref > Decimal('0'):
+                profit_loss_percent = Decimal('Inf') 
+
+        # CORREÇÃO: Calcula o preço médio de compra na moeda de exibição.
+        average_buy_price_display = None
+        if holding_item.quantity > 0 and cost_basis_pref is not None:
+            average_buy_price_display = cost_basis_pref / holding_item.quantity
+
+        if current_value_pref is not None:
+            total_portfolio_value_pref_currency += current_value_pref
         
         enriched_holdings.append({
             'holding': holding_item,
-            'current_value_display': value_in_preferred_currency, 
-            'original_currency': holding_item.cryptocurrency.price_currency,
-            'profit_loss': holding_item.profit_loss, 
-            'profit_loss_percent': holding_item.profit_loss_percent
+            'average_buy_price_display': average_buy_price_display, # Adicionado e calculado na view
+            'current_price_display': current_price_pref,
+            'current_value_display': current_value_pref, 
+            'profit_loss_display': profit_loss_pref,
+            'profit_loss_percent_display': profit_loss_percent,
+            'display_currency': display_currency_for_item,
+            'original_price_currency': crypto.price_currency,
         })
+        
+    if conversion_issues_warning_flag:
+        messages.warning(request, f"Atenção: Alguns valores podem não ter sido completamente convertidos para sua moeda preferida ({user_profile.preferred_fiat_currency}) devido à falta de taxas de câmbio. Verifique os logs do servidor.")
 
     context = {
         'page_title': 'Meu Dashboard',
-        'user': request.user,
         'user_profile': user_profile,
         'holdings': enriched_holdings,
-        'total_portfolio_value': total_portfolio_value_in_preferred_currency,
+        'total_portfolio_value': total_portfolio_value_pref_currency,
         'portfolio_currency': user_profile.preferred_fiat_currency,
-        'show_conversion_warning': conversion_warning_shown_for_request,
-        'show_currency_mismatch_warning': currency_mismatch_warning_shown_for_request,
+        'conversion_issues_warning': conversion_issues_warning_flag,
     }
     return render(request, 'core/dashboard.html', context)
+
+# ... (outras views: binance_test_view, cryptocurrency_list_view, etc. até o final) ...
 
 @login_required
 def binance_test_view(request):
@@ -233,23 +261,9 @@ def binance_test_view(request):
 
 @login_required
 def cryptocurrency_list_view(request):
-    """
-    View para listar criptomoedas. Os preços são atualizados em segundo plano pelo Celery.
-    Esta view agora também busca dados de 24h, mas a atualização principal do current_price
-    deve vir da tarefa Celery para melhor performance.
-    """
-    # A lógica de atualização de preços foi movida para a tarefa Celery (core.tasks.update_all_cryptocurrency_prices)
-    # Esta view agora apenas exibe os dados do banco de dados, que são atualizados pela tarefa Celery.
-    # No entanto, para fornecer dados de 24h (que não estamos armazenando no modelo ainda),
-    # podemos fazer uma chamada API aqui, cientes das implicações de performance.
-    # Idealmente, os dados de 24h também seriam atualizados e armazenados pela tarefa Celery.
-
-    cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
-    enriched_cryptos_data = []
-    
     client = None
     client_initialized_successfully = False
-    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET: # Chaves de sistema para dados de mercado
+    if settings.BINANCE_API_KEY and settings.BINANCE_API_SECRET:
         try:
             client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
             client_initialized_successfully = True
@@ -257,16 +271,19 @@ def cryptocurrency_list_view(request):
             print(f"Lista Cripto: Falha ao inicializar cliente Binance para dados de 24h: {e}")
             messages.warning(request, "Não foi possível buscar dados de mercado atualizados da Binance.")
 
+    cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
+    enriched_cryptos_data = [] 
+    
     for crypto_instance in cryptos_from_db:
         data = {
-            'db_instance': crypto_instance, # Passa a instância do modelo
+            'db_instance': crypto_instance,
             'symbol': crypto_instance.symbol,
             'name': crypto_instance.name,
             'logo_url': crypto_instance.logo_url,
             'current_price': crypto_instance.current_price,
             'price_currency': crypto_instance.price_currency,
-            'last_updated': crypto_instance.last_updated, # Este será atualizado pela tarefa Celery
-            'price_change_percent_24h': None, # Será preenchido pela API, se possível
+            'last_updated': crypto_instance.last_updated, 
+            'price_change_percent_24h': None,
             'volume_24h': None,
             'quote_volume_24h': None,
             'high_price_24h': None,
@@ -279,15 +296,13 @@ def cryptocurrency_list_view(request):
                 if ticker_24h:
                     data['price_change_percent_24h'] = Decimal(ticker_24h.get('priceChangePercent', '0'))
                     data['volume_24h'] = Decimal(ticker_24h.get('volume', '0'))
-                    data['quote_volume_24h'] = Decimal(ticker_data_24h.get('quoteVolume', '0'))
+                    data['quote_volume_24h'] = Decimal(ticker_24h.get('quoteVolume', '0')) 
                     data['high_price_24h'] = Decimal(ticker_24h.get('highPrice', '0'))
                     data['low_price_24h'] = Decimal(ticker_24h.get('lowPrice', '0'))
-                    # O current_price e last_updated do crypto_instance são atualizados pela tarefa Celery.
-                    # Podemos opcionalmente atualizar aqui também se a diferença for grande, mas aumenta a carga.
-                    # data['current_price'] = Decimal(ticker_24h.get('lastPrice', crypto_instance.current_price))
+                    data['current_price'] = Decimal(ticker_24h.get('lastPrice', crypto_instance.current_price or '0')) 
 
             except Exception as e:
-                print(f"Erro ao buscar dados de 24h para {crypto_instance.symbol}: {e}")
+                print(f"Erro ao buscar dados de 24h para {crypto_instance.symbol} em cryptocurrency_list_view: {e}")
         enriched_cryptos_data.append(data)
         
     context = {
@@ -295,9 +310,6 @@ def cryptocurrency_list_view(request):
         'cryptocurrencies_data': enriched_cryptos_data,
     }
     return render(request, 'core/cryptocurrency_list.html', context)
-
-# ... (restante das views: cryptocurrency_detail_view, add_transaction_view, etc. permanecem como na última atualização,
-# incluindo trade_market_buy_view e trade_market_sell_view) ...
 
 @login_required
 def cryptocurrency_detail_view(request, symbol):

@@ -20,6 +20,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core.apps.CoreConfig',
+    # Adicionar 'django_celery_beat' se for usar o agendador do BD,
+    # mas para agendamento simples, a configuração no settings é suficiente.
 ]
 
 MIDDLEWARE = [
@@ -51,7 +53,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'crypto_trader.wsgi.application'
-ASGI_APPLICATION = 'crypto_trader.asgi.application'
+ASGI_APPLICATION = 'crypto_trader.asgi.application' # Adicionado para compatibilidade futura com Celery 5+
 
 DATABASES = {
     'default': {
@@ -68,10 +70,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'pt-br'
-TIME_ZONE = 'America/Sao_Paulo' 
+TIME_ZONE = 'America/Sao_Paulo' # Importante para Celery Beat
 USE_I18N = True
 USE_L10N = True
-USE_TZ = True 
+USE_TZ = True # Importante para Celery Beat
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -86,25 +88,27 @@ LOGIN_REDIRECT_URL = 'core:dashboard'
 LOGOUT_REDIRECT_URL = 'core:index'
 
 # --- Configurações do Celery ---
+# URL do Broker (Redis neste caso). Se o Redis estiver rodando localmente na porta padrão:
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+# URL do Backend de Resultados (opcional, mas útil para rastrear o status das tarefas)
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE 
-CELERY_TASK_TRACK_STARTED = True 
-CELERY_TASK_TIME_LIMIT = 30 * 60 
+CELERY_TIMEZONE = TIME_ZONE # Usa o mesmo timezone do Django
+CELERY_TASK_TRACK_STARTED = True # Para que as tarefas reportem o estado 'STARTED'
+CELERY_TASK_TIME_LIMIT = 30 * 60 # Limite de tempo para tarefas (30 minutos)
 
 # --- Configurações do Celery Beat (Agendador) ---
 CELERY_BEAT_SCHEDULE = {
-    'update-crypto-prices-every-5-minutes': {
-        'task': 'core.tasks.update_all_cryptocurrency_prices', 
-        'schedule': 60.0,  # A cada 300 segundos (5 minutos)
+    'update-crypto-prices-every-minute': { # Nome da tarefa alterado para refletir a frequência
+        'task': 'core.tasks.update_all_cryptocurrency_prices', # Caminho para a sua tarefa
+        'schedule': 60.0,  # Executar a cada 60 segundos (1 minuto)
     },
-    'update-exchange-rates-every-hour': { # Nova tarefa
+    'update-exchange-rates-every-minute': { # Nome da tarefa alterado e frequência
         'task': 'core.tasks.update_exchange_rates', # Caminho para a nova tarefa
-        'schedule': crontab(minute='0', hour='*/1'),  # Executar no início de cada hora
-        # Alternativamente, para um intervalo mais frequente durante o desenvolvimento:
-        # 'schedule': 600.0, # A cada 600 segundos (10 minutos)
+        'schedule': 60.0,  # Executar a cada 60 segundos (1 minuto)
     },
 }
+# Se você usar django-celery-beat (para agendamento via Admin), adicione:
+# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

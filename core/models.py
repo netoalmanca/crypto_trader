@@ -21,7 +21,7 @@ class Cryptocurrency(models.Model):
     name = models.CharField(max_length=100, help_text="Nome completo da criptomoeda (ex: Bitcoin)")
     logo_url = models.URLField(max_length=255, blank=True, null=True, help_text="URL do logo da criptomoeda")
     current_price = models.DecimalField( 
-        max_digits=20, decimal_places=8, null=True, blank=True, 
+        max_digits=20, decimal_places=8, null=True, blank=True, # Aumentado decimal_places para maior precisão
         help_text="Preço atual na moeda definida em 'Moeda do Preço', atualizado periodicamente"
     )
     price_currency = models.CharField(
@@ -52,13 +52,13 @@ class Cryptocurrency(models.Model):
         desta criptomoeda, com base no seu valor.
         """
         if self.current_price is not None:
-            if self.current_price < Decimal('0.0001'):
+            if self.current_price < Decimal('0.0001'): # Para moedas de valor muito baixo
                 return 8
-            elif self.current_price < Decimal('1'):
+            elif self.current_price < Decimal('1'): # Para moedas de valor baixo
                 return 4 
-            elif self.current_price < Decimal('100'):
+            elif self.current_price < Decimal('100'): # Para moedas de valor médio
                 return 2 
-        return 2 
+        return 2 # Padrão para a maioria das moedas de valor mais alto (ex: BTC)
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
@@ -83,8 +83,8 @@ class Holding(models.Model):
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='held_by_users')
     quantity = models.DecimalField(max_digits=28, decimal_places=18, default=Decimal('0.0'), help_text="Quantidade da criptomoeda possuída")
     average_buy_price = models.DecimalField( 
-        max_digits=20, decimal_places=8, null=True, blank=True, 
-        help_text="Preço médio de compra na moeda de preço da criptomoeda (ex: USDT)"
+        max_digits=20, decimal_places=8, null=True, blank=True, # Aumentado decimal_places
+        help_text="Preço médio de compra na moeda de preço da criptomoeda (ex: USD)"
     )
 
     class Meta:
@@ -121,21 +121,27 @@ class Transaction(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='transactions')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPE_CHOICES, help_text="Tipo da transação")
+    
     quantity_crypto = models.DecimalField(max_digits=28, decimal_places=18, help_text="Quantidade da criptomoeda transacionada")
+    
     price_per_unit = models.DecimalField( 
-        max_digits=20, decimal_places=8, 
+        max_digits=20, decimal_places=8, # Aumentado decimal_places
         help_text="Preço por unidade da cripto na moeda base da criptomoeda (ex: USDT)"
     ) 
+    
     total_value = models.DecimalField( 
-        max_digits=20, decimal_places=8, null=True, blank=True, 
+        max_digits=20, decimal_places=8, null=True, blank=True, # Aumentado decimal_places
         help_text="Valor total da transação na moeda base da criptomoeda (calculado)"
     )
+    
     fees = models.DecimalField( 
-        max_digits=20, decimal_places=8, default=Decimal('0.00'), 
+        max_digits=20, decimal_places=8, default=Decimal('0.00'), # Aumentado decimal_places
         help_text="Taxas da transação na moeda base da criptomoeda"
     )
+    
     transaction_date = models.DateTimeField(default=timezone.now, help_text="Data e hora em que a transação ocorreu")
     timestamp = models.DateTimeField(auto_now_add=True, help_text="Data e hora do registro no sistema") 
+    
     binance_order_id = models.CharField(max_length=255, blank=True, null=True, help_text="ID da ordem na Binance (se aplicável)")
     notes = models.TextField(blank=True, null=True, help_text="Notas adicionais sobre a transação")
 

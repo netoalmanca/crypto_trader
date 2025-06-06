@@ -27,9 +27,9 @@
             <p class="text-3xl font-bold text-green-400">
                 {{ total_portfolio_value|floatformat:2 }} {{ portfolio_currency }}
             </p>
-            <p class="text-xs text-gray-500 mt-1">Baseado nos preços atuais ({{ portfolio_currency }})</p>
-            {% if show_conversion_warning or show_currency_mismatch_warning %}
-                <p class="text-xs text-yellow-400 mt-1">Atenção: O valor pode não refletir totalmente sua moeda preferida devido a limitações na conversão ou disponibilidade de taxas.</p>
+            <p class="text-xs text-gray-500 mt-1">Em sua moeda preferida ({{ portfolio_currency }})</p>
+            {% if conversion_issues_warning %}
+                <p class="text-xs text-yellow-400 mt-1">Atenção: Alguns valores podem não ter sido convertidos para sua moeda preferida.</p>
             {% endif %}
         </div>
         <div class="bg-gray-700 p-6 rounded-lg shadow-lg hover:shadow-blue-500/30 transition-shadow duration-300">
@@ -57,7 +57,7 @@
     </div>
 
     <div class="mb-10">
-        <h2 class="text-2xl font-semibold text-white mb-4">Minhas Posses</h2>
+        <h2 class="text-2xl font-semibold text-white mb-4">Minhas Posses (em {{ portfolio_currency }})</h2>
         {% if holdings %}
             <div class="overflow-x-auto rounded-lg shadow">
                 <table class="min-w-full leading-normal">
@@ -65,10 +65,10 @@
                         <tr>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Cripto</th>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Quantidade</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Médio Compra ({{ portfolio_currency }})</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Atual ({{ portfolio_currency }})</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Valor Atual ({{ portfolio_currency }})</th>
-                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P ({{ portfolio_currency }})</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Médio Compra</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Atual</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Valor Atual</th>
+                            <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P</th>
                             <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">L/P (%)</th>
                         </tr>
                     </thead>
@@ -95,42 +95,39 @@
                                 <p class="text-gray-100 whitespace-no-wrap">{{ item.holding.quantity|floatformat:"-8" }}</p>
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                                {% if item.holding.average_buy_price is not None %}
-                                    <p class="text-gray-300 whitespace-no-wrap">{{ item.holding.average_buy_price|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}</p>
+                                {% if item.average_buy_price_display is not None %}
+                                    <p class="text-gray-300 whitespace-no-wrap">{{ item.average_buy_price_display|floatformat:2 }} <span class="text-xs text-gray-400">{{ item.display_currency }}</span></p>
                                 {% else %}
-                                    <p class="text-gray-500 whitespace-no-wrap">N/D</p>
+                                     <p class="text-gray-400 whitespace-no-wrap" title="Não foi possível converter.">{{ item.original_avg_buy_price|floatformat:2 }} <span class="text-xs text-gray-500">{{ item.original_price_currency }}</span></p>
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                                {% if item.holding.cryptocurrency.current_price is not None %}
-                                    <p class="text-gray-300 whitespace-no-wrap">{{ item.holding.cryptocurrency.current_price|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}</p>
+                                {% if item.current_price_display is not None %}
+                                    <p class="text-gray-300 whitespace-no-wrap">{{ item.current_price_display|floatformat:2 }} <span class="text-xs text-gray-400">{{ item.display_currency }}</span></p>
                                 {% else %}
-                                    <p class="text-gray-500 whitespace-no-wrap">N/D</p>
+                                     <p class="text-gray-400 whitespace-no-wrap" title="Não foi possível converter.">{{ item.original_current_price|floatformat:2 }} <span class="text-xs text-gray-500">{{ item.original_price_currency }}</span></p>
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
                                 {% if item.current_value_display is not None %}
-                                    <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ item.current_value_display|floatformat:2 }} {{ portfolio_currency }}</p>
-                                    {% if item.original_currency != portfolio_currency %}
-                                        <p class="text-xs text-gray-500">(Original: {{ item.holding.current_market_value|floatformat:2 }} {{ item.original_currency }})</p>
-                                    {% endif %}
+                                    <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ item.current_value_display|floatformat:2 }} <span class="text-xs text-gray-400">{{ item.display_currency }}</span></p>
                                 {% else %}
                                     <p class="text-gray-500 whitespace-no-wrap">N/D</p>
                                 {% endif %}
                             </td>
                             <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                                {% if item.profit_loss is not None %}
-                                    <p class="whitespace-no-wrap {% if item.profit_loss > 0 %}text-green-400{% elif item.profit_loss < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
-                                        {{ item.profit_loss|floatformat:2 }} {{ item.holding.cryptocurrency.price_currency }}
+                                {% if item.profit_loss_display is not None %}
+                                    <p class="whitespace-no-wrap {% if item.profit_loss_display > 0 %}text-green-400{% elif item.profit_loss_display < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
+                                        {{ item.profit_loss_display|floatformat:2 }} <span class="text-xs text-gray-400">{{ item.display_currency }}</span>
                                     </p>
                                 {% else %}
                                     <p class="text-gray-500 whitespace-no-wrap">N/D</p>
                                 {% endif %}
                             </td>
                              <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                                {% if item.profit_loss_percent is not None %}
-                                    <p class="whitespace-no-wrap {% if item.profit_loss_percent > 0 %}text-green-400{% elif item.profit_loss_percent < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
-                                        {{ item.profit_loss_percent|floatformat:2 }}%
+                                {% if item.profit_loss_percent_display is not None %}
+                                    <p class="whitespace-no-wrap {% if item.profit_loss_percent_display > 0 %}text-green-400{% elif item.profit_loss_percent_display < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
+                                     {% if item.profit_loss_percent_display == "Inf" %}Infinito{% else %}{{ item.profit_loss_percent_display|floatformat:2 }}%{% endif %}
                                     </p>
                                 {% else %}
                                     <p class="text-gray-500 whitespace-no-wrap">N/D</p>
