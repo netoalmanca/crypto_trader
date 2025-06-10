@@ -55,9 +55,6 @@ class Cryptocurrency(models.Model):
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     
-    # Campos que realmente armazenarão os dados criptografados.
-    # Usamos TextField para acomodar o texto criptografado.
-    # O prefixo '_' indica que não devem ser acessados diretamente.
     _binance_api_key = models.TextField(blank=True, help_text="Encrypted Binance API Key")
     _binance_api_secret = models.TextField(blank=True, help_text="Encrypted Binance API Secret")
 
@@ -67,25 +64,27 @@ class UserProfile(models.Model):
         default='BRL',
         help_text="Moeda fiduciária preferida do usuário para exibição de valores"
     )
+    
+    use_testnet = models.BooleanField(
+        default=True,
+        verbose_name="Usar Ambiente de Teste (Testnet)",
+        help_text="Se marcado, todas as operações de trade usarão a Testnet da Binance (sem fundos reais). Desmarque para usar sua conta real (Mainnet)."
+    )
 
     @property
     def binance_api_key(self):
-        """Property para descriptografar a chave API ao acessá-la."""
         return decrypt(self._binance_api_key)
 
     @binance_api_key.setter
     def binance_api_key(self, value: str):
-        """Property para criptografar a chave API ao salvá-la."""
         self._binance_api_key = encrypt(value)
 
     @property
     def binance_api_secret(self):
-        """Property para descriptografar o segredo API ao acessá-lo."""
         return decrypt(self._binance_api_secret)
 
     @binance_api_secret.setter
     def binance_api_secret(self, value: str):
-        """Property para criptografar o segredo API ao salvá-lo."""
         self._binance_api_secret = encrypt(value)
 
     class Meta:
@@ -96,7 +95,6 @@ class UserProfile(models.Model):
         return f"Perfil de {self.user.username}"
 
 
-# Demais modelos (Holding, Transaction, ExchangeRate) permanecem os mesmos...
 class Holding(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='holdings')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='held_by_users')

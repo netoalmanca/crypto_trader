@@ -24,23 +24,33 @@ class UserProfileAPIForm(forms.ModelForm):
     binance_api_key = forms.CharField(label=_("Sua Chave API da Binance"), widget=forms.TextInput(attrs={'class': 'form-input'}), required=False)
     binance_api_secret = forms.CharField(label=_("Seu Segredo API da Binance"), widget=forms.PasswordInput(attrs={'class': 'form-input', 'render_value': False}), required=False)
     preferred_fiat_currency = forms.ChoiceField(label=_("Sua Moeda Fiat Preferida"), choices=FIAT_CURRENCY_CHOICES, widget=forms.Select(attrs={'class': 'form-input'}))
+    use_testnet = forms.BooleanField(
+        label=_("Usar Ambiente de Teste (Testnet)"),
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'h-5 w-5 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500'})
+    )
     class Meta:
         model = UserProfile
-        fields = ['binance_api_key', 'binance_api_secret', 'preferred_fiat_currency']
+        fields = ['binance_api_key', 'binance_api_secret', 'preferred_fiat_currency', 'use_testnet']
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
-            key = self.instance.binance_api_key; secret_exists = self.instance.binance_api_secret and self.instance.binance_api_secret != 'DECRYPTION_FAILED'
+            key = self.instance.binance_api_key
+            secret_exists = self.instance.binance_api_secret and self.instance.binance_api_secret != 'DECRYPTION_FAILED'
             self.fields['binance_api_key'].widget.attrs['placeholder'] = f"Atual: {key[:4]}...{key[-4:]}" if key and key != 'DECRYPTION_FAILED' else "Nenhuma chave definida"
             self.fields['binance_api_secret'].widget.attrs['placeholder'] = "••••••••••••••••" if secret_exists else "Nenhum segredo definido"
+    
     def save(self, commit=True):
-        profile = self.instance; new_key = self.cleaned_data.get('binance_api_key'); new_secret = self.cleaned_data.get('binance_api_secret')
+        profile = super().save(commit=False)
+        new_key = self.cleaned_data.get('binance_api_key')
+        new_secret = self.cleaned_data.get('binance_api_secret')
         if new_key: profile.binance_api_key = new_key
         if new_secret: profile.binance_api_secret = new_secret
-        profile.preferred_fiat_currency = self.cleaned_data.get('preferred_fiat_currency')
         if commit: profile.save()
         return profile
 
+# FORMULÁRIO REINSERIDO
 class TransactionForm(forms.ModelForm):
     transaction_date = forms.DateTimeField(label=_("Data da Transação"), widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-input'}), initial=timezone.now)
     cryptocurrency = forms.ModelChoiceField(queryset=Cryptocurrency.objects.all().order_by('name'), widget=forms.Select(attrs={'class': 'form-input'}), label=_("Criptomoeda"))
@@ -49,9 +59,11 @@ class TransactionForm(forms.ModelForm):
         model = Transaction
         fields = ['cryptocurrency', 'transaction_type', 'quantity_crypto', 'price_per_unit', 'fees', 'transaction_date', 'notes']
         widgets = {'quantity_crypto': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Ex: 0.5', 'step': 'any'}),'price_per_unit': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Preço na moeda base', 'step': 'any'}),'fees': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Taxas na moeda base', 'step': 'any'}),'notes': forms.Textarea(attrs={'class': 'form-input', 'rows': 3, 'placeholder': 'Opcional'})}
+    
     def __init__(self, *args, **kwargs):
         self.user_profile = kwargs.pop('user_profile', None)
         super().__init__(*args, **kwargs)
+
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get("transaction_type") == 'SELL' and self.user_profile:
@@ -78,21 +90,15 @@ class MarketBuyForm(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         buy_type = cleaned_data.get('buy_type')
-        quantity = cleaned_data.get('quantity')
-        quote_quantity = cleaned_data.get('quote_quantity')
-
-        if buy_type == 'QUANTITY' and not quantity:
+        if buy_type == 'QUANTITY' and not cleaned_data.get('quantity'):
             self.add_error('quantity', _("Para este tipo de compra, a quantidade é obrigatória."))
-        elif buy_type == 'QUOTE_QUANTITY' and not quote_quantity:
+        elif buy_type == 'QUOTE_QUANTITY' and not cleaned_data.get('quote_quantity'):
             self.add_error('quote_quantity', _("Para este tipo de compra, o valor a gastar é obrigatório."))
-        
         if buy_type == 'QUANTITY':
             cleaned_data['quote_quantity'] = None
         else:
             cleaned_data['quantity'] = None
-            
         return cleaned_data
-
 
 class MarketSellForm(forms.Form):
     SELL_TYPE_CHOICES = [('QUANTITY', 'Vender Quantidade'), ('QUOTE_RECEIVE', 'Receber Valor (Aprox.)')]
@@ -113,22 +119,15 @@ class MarketSellForm(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         sell_type = cleaned_data.get('sell_type')
-        quantity = cleaned_data.get('quantity')
-        quote_quantity = cleaned_data.get('quote_quantity_to_receive')
-
-        if sell_type == 'QUANTITY' and not quantity:
+        if sell_type == 'QUANTITY' and not cleaned_data.get('quantity'):
             self.add_error('quantity', _("Para este tipo de venda, a quantidade é obrigatória."))
-        elif sell_type == 'QUOTE_RECEIVE' and not quote_quantity:
+        elif sell_type == 'QUOTE_RECEIVE' and not cleaned_data.get('quote_quantity_to_receive'):
             self.add_error('quote_quantity_to_receive', _("Para este tipo de venda, o valor a receber é obrigatório."))
-        
         if sell_type == 'QUANTITY':
             cleaned_data['quote_quantity_to_receive'] = None
         else:
             cleaned_data['quantity'] = None
-        
-        # Validação de saldo é feita na view, pois para 'QUOTE_RECEIVE' precisamos do preço atual.
         return cleaned_data
-
 
 class LimitBuyForm(forms.Form):
     ORDER_TYPE_CHOICES = [('QUANTITY', _('Por Quantidade')), ('TOTAL', _('Por Valor Total'))]

@@ -5,13 +5,26 @@
 
 {% block content %}
 <div class="max-w-lg mx-auto mt-4 sm:mt-8 bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl">
+
+    <!-- Bloco de Aviso de Ambiente -->
+    {% if not request.user.profile.use_testnet %}
+        <div class="text-sm p-4 rounded-md mb-6 border border-red-500/60 bg-red-700/40 text-red-200 font-bold">
+            <div class="flex items-center">
+                <svg class="h-6 w-6 mr-3 animate-ping" fill="currentColor" viewBox="0 0 20 20"><path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" fill-rule="evenodd"></path></svg>
+                <div>
+                    <strong>ALERTA: MODO MAINNET ATIVO</strong>
+                    <p class="font-normal mt-1">Você está operando na sua conta real da Binance. As transações usarão seus fundos.</p>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="text-sm text-yellow-300 bg-yellow-700 bg-opacity-30 p-3 rounded-md mb-6">
+            <p><strong>Ambiente de Teste (Testnet):</strong> Esta funcionalidade interage com a Testnet da Binance.</p>
+            <p class="mt-2">Ordens a mercado são executadas imediatamente ao melhor preço disponível. O valor final recebido pode variar.</p>
+        </div>
+    {% endif %}
+
     <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
-    
-    <div class="text-sm text-yellow-300 bg-yellow-700 bg-opacity-30 p-3 rounded-md mb-6">
-        <p><strong>Atenção:</strong> Esta funcionalidade interage com a <strong>Testnet da Binance</strong>.</p>
-        <p class="mt-2">Ordens a mercado são executadas imediatamente ao melhor preço disponível. O valor final recebido pode variar.</p>
-        <p class="mt-2">Ao vender por "Valor a Receber", a quantidade de cripto é calculada com base no preço atual e pode não ser exata.</p>
-    </div>
 
     {% if not form.fields.cryptocurrency.queryset %}
         <div class="alert alert-warning text-center p-4 bg-yellow-900/50 text-yellow-300 rounded-lg">
@@ -104,8 +117,6 @@ document.addEventListener('DOMContentLoaded', function() {
     sellTypeRadios.forEach(radio => {
         radio.addEventListener('change', toggleSellFields);
     });
-
-    // Initial state on page load
     toggleSellFields();
 });
 </script>

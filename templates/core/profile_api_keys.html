@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load l10n %}
+{% load i18n %}
 
 {% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
 
@@ -7,43 +7,60 @@
 <div class="max-w-xl mx-auto mt-4 sm:mt-8 bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl">
     <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
     
-    <p class="text-sm text-yellow-300 bg-yellow-700 bg-opacity-30 p-3 rounded-md mb-6">
-        <strong>Atenção:</strong> As chaves API são sensíveis. Certifique-se de que está usando chaves geradas para a 
-        <strong>Testnet da Binance</strong> para este ambiente de desenvolvimento e teste. 
-        Nunca use suas chaves da API principal da Binance em ambientes não seguros.
-        A criptografia para armazenamento seguro destas chaves ainda está pendente.
-    </p>
+    <!-- Aviso Dinâmico -->
+    <div 
+        x-data="{ isTestnet: document.getElementById('{{ form.use_testnet.id_for_label }}') ? document.getElementById('{{ form.use_testnet.id_for_label }}').checked : true }"
+        class="text-sm p-4 rounded-md mb-6 border transition-all duration-300"
+        :class="{
+            'bg-yellow-700/30 border-yellow-500/50 text-yellow-300': isTestnet,
+            'bg-red-700/40 border-red-500/60 text-red-200 font-bold animate-pulse': !isTestnet
+        }"
+    >
+        <strong x-text="isTestnet ? 'Ambiente de Teste (Testnet) Ativo' : 'ALERTA: Ambiente Real (Mainnet) Ativo'"></strong>
+        <p class="mt-1" x-text="isTestnet ? 'As chaves API abaixo serão usadas para interagir com a Testnet da Binance. Nenhuma transação com fundos reais será feita.' : 'As chaves API abaixo serão usadas para sua conta REAL da Binance. TODAS as transações envolverão fundos reais. Tenha certeza absoluta do que está fazendo.'"></p>
+    </div>
 
     <form method="post" novalidate>
         {% csrf_token %}
         
-        {% for field in form %}
-            <div class="mb-4">
-                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label_tag }} {% if field.field.required %}<span class="text-red-400">*</span>{% endif %}</label>
-                {{ field }}
-                {% if field.help_text %}
-                    <p class="mt-1 text-xs text-gray-400">{{ field.help_text|safe }}</p>
-                {% endif %}
-                {% for error in field.errors %}
-                    <p class="mt-1 text-xs text-red-400">{{ error }}</p>
-                {% endfor %}
+        <div class="space-y-6">
+            <div>
+                <label for="{{ form.binance_api_key.id_for_label }}" class="form-label">{{ form.binance_api_key.label_tag }}</label>
+                {{ form.binance_api_key }}
             </div>
-        {% endfor %}
+            
+            <div>
+                <label for="{{ form.binance_api_secret.id_for_label }}" class="form-label">{{ form.binance_api_secret.label_tag }}</label>
+                {{ form.binance_api_secret }}
+            </div>
 
-        {% if form.non_field_errors %}
-            <div class="mb-4 p-3 bg-red-700 bg-opacity-30 rounded-md">
-                {% for error in form.non_field_errors %}
-                    <p class="text-sm text-red-300">{{ error }}</p>
-                {% endfor %}
+            <hr class="border-gray-600">
+
+            <div>
+                <label for="{{ form.preferred_fiat_currency.id_for_label }}" class="form-label">{{ form.preferred_fiat_currency.label_tag }}</label>
+                {{ form.preferred_fiat_currency }}
             </div>
-        {% endif %}
-        
-        <div class="mt-6 sm:mt-8">
-            <button type="submit" class="btn-primary">Salvar Configurações</button>
+            
+            <!-- Campo de Seleção Testnet/Mainnet -->
+            <div class="relative flex items-start pt-4">
+                <div class="flex h-6 items-center">
+                    <input @change="isTestnet = $event.target.checked" id="{{ form.use_testnet.id_for_label }}" name="{{ form.use_testnet.html_name }}" type="checkbox" {% if form.instance.use_testnet %}checked{% endif %} class="h-5 w-5 rounded border-gray-500 bg-gray-700 text-cyan-600 focus:ring-cyan-500">
+                </div>
+                <div class="ml-3 text-sm leading-6">
+                    <label for="{{ form.use_testnet.id_for_label }}" class="font-medium text-gray-200">{{ form.use_testnet.label }}</label>
+                    <p class="text-gray-400">{{ form.use_testnet.help_text|safe }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <button type="submit" class="btn-primary w-full">Salvar Configurações</button>
         </div>
     </form>
     <p class="mt-6 text-center text-sm text-gray-400">
         <a href="{% url 'core:dashboard' %}" class="font-medium text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a>
     </p>
 </div>
+<!-- Incluindo Alpine.js para a reatividade do aviso -->
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 {% endblock %}
