@@ -215,15 +215,36 @@ def recalculate_holdings_view(request):
 def cryptocurrency_list_view(request):
     client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, testnet=True)
     cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
+    
     enriched_cryptos_data = []
     for crypto in cryptos_from_db:
         data = {'db_instance': crypto}
         try:
             ticker_24h = client.get_ticker(symbol=f"{crypto.symbol.upper()}{crypto.price_currency.upper()}")
             data.update({'price_change_percent_24h': Decimal(ticker_24h.get('priceChangePercent', '0'))})
-        except BinanceAPIException: pass
+        except BinanceAPIException:
+            # Define explicitamente como None em caso de falha para evitar erros no template
+            data.update({'price_change_percent_24h': None})
         enriched_cryptos_data.append(data)
-    return render(request, 'core/cryptocurrency_list.html', {'page_title': 'Lista de Criptomoedas', 'cryptocurrencies_data': enriched_cryptos_data})
+
+    # Cria o objeto Paginator com a lista enriquecida
+    paginator = Paginator(enriched_cryptos_data, 20)  # Mostra 20 criptos por página
+    page_number = request.GET.get('page')
+
+    try:
+        cryptocurrencies_page = paginator.page(page_number)
+    except PageNotAnInteger:
+        # Se 'page' não for um inteiro, mostra a primeira página
+        cryptocurrencies_page = paginator.page(1)
+    except EmptyPage:
+        # Se 'page' estiver fora do intervalo, mostra a última página
+        cryptocurrencies_page = paginator.page(paginator.num_pages)
+
+    return render(request, 'core/cryptocurrency_list.html', {
+        'page_title': 'Lista de Criptomoedas',
+        'cryptocurrencies_page': cryptocurrencies_page  # Passa o objeto da página para o template
+    })
+
 
 @login_required
 def cryptocurrency_detail_view(request, symbol):

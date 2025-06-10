@@ -13,17 +13,15 @@
                         <th scope="col" class="px-6 py-3">Ativo</th>
                         <th scope="col" class="px-6 py-3 text-right">Preço Atual</th>
                         <th scope="col" class="px-6 py-3 text-right">Variação 24h (%)</th>
-                        <!-- Adicione outras colunas se desejar, como Volume -->
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in cryptocurrencies_data %}
+                    {% for item in cryptocurrencies_page %}
                     <tr class="border-b border-gray-700 hover:bg-gray-700/50">
                         <td class="px-6 py-4 font-medium whitespace-nowrap">
-                            <!-- **CORREÇÃO**: Acessa o objeto da base de dados através de `item.db_instance` -->
                             <a href="{% url 'core:cryptocurrency_detail' item.db_instance.symbol %}" class="flex items-center group">
                                 {% if item.db_instance.logo_url %}
-                                    <img src="{{ item.db_instance.logo_url }}" class="h-8 w-8 mr-3 rounded-full">
+                                    <img src="{{ item.db_instance.logo_url }}" class="h-8 w-8 mr-3 rounded-full" alt="Logo de {{ item.db_instance.name }}">
                                 {% endif %}
                                 <div>
                                     <div class="text-base font-semibold text-white group-hover:text-cyan-400">{{ item.db_instance.name }}</div>
@@ -34,14 +32,53 @@
                         <td class="px-6 py-4 text-right">
                             {{ item.db_instance.current_price|floatformat:item.db_instance.get_price_decimals|intcomma }} {{ item.db_instance.price_currency }}
                         </td>
-                        <td class="px-6 py-4 text-right {% if item.price_change_percent_24h > 0 %}text-green-400{% elif item.price_change_percent_24h < 0 %}text-red-400{% endif %}">
-                            {{ item.price_change_percent_24h|floatformat:2 }}%
+                        <td class="px-6 py-4 text-right {% if item.price_change_percent_24h > 0 %}text-green-400{% elif item.price_change_percent_24h < 0 %}text-red-400{% else %}text-gray-400{% endif %}">
+                            {% if item.price_change_percent_24h is not None %}
+                                {{ item.price_change_percent_24h|floatformat:2 }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="px-6 py-12 text-center text-gray-500">
+                            Nenhuma criptomoeda encontrada no sistema.
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        
+        <!-- Componente de Paginação -->
+        {% if cryptocurrencies_page.has_other_pages %}
+            <nav class="bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-700 sm:px-6" aria-label="Pagination">
+                <div class="hidden sm:block">
+                    <p class="text-sm text-gray-400">
+                        Mostrando
+                        <span class="font-medium text-white">{{ cryptocurrencies_page.start_index }}</span>
+                        a
+                        <span class="font-medium text-white">{{ cryptocurrencies_page.end_index }}</span>
+                        de
+                        <span class="font-medium text-white">{{ cryptocurrencies_page.paginator.count }}</span>
+                        resultados
+                    </p>
+                </div>
+                <div class="flex-1 flex justify-between sm:justify-end">
+                    {% if cryptocurrencies_page.has_previous %}
+                        <a href="?page={{ cryptocurrencies_page.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                            Anterior
+                        </a>
+                    {% endif %}
+                    {% if cryptocurrencies_page.has_next %}
+                        <a href="?page={{ cryptocurrencies_page.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                            Próxima
+                        </a>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
