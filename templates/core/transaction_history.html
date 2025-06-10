@@ -25,7 +25,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for tx in transactions %}
+                    {% for tx in transactions_page %}
                     <tr class="border-b border-gray-700 hover:bg-gray-700/50">
                         <td class="px-6 py-4">{{ tx.transaction_date|date:"d/m/Y H:i" }}</td>
                         <td class="px-6 py-4 font-semibold text-white">{{ tx.cryptocurrency.symbol }}</td>
@@ -35,7 +35,7 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-right">{{ tx.quantity_crypto|floatformat:"-8" }}</td>
-                        <td class="px-6 py-4 text-right">{{ tx.price_per_unit|floatformat:"-2" }}</td>
+                        <td class="px-6 py-4 text-right">{{ tx.price_per_unit|floatformat:"-2"|intcomma }}</td>
                         <td class="px-6 py-4 text-right">{{ tx.total_value|floatformat:"-2"|intcomma }}</td>
                     </tr>
                     {% empty %}
@@ -48,6 +48,35 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Componente de Paginação -->
+        {% if transactions_page.has_other_pages %}
+            <nav class="bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-700 sm:px-6" aria-label="Pagination">
+                <div class="hidden sm:block">
+                    <p class="text-sm text-gray-400">
+                        Mostrando
+                        <span class="font-medium text-white">{{ transactions_page.start_index }}</span>
+                        a
+                        <span class="font-medium text-white">{{ transactions_page.end_index }}</span>
+                        de
+                        <span class="font-medium text-white">{{ transactions_page.paginator.count }}</span>
+                        resultados
+                    </p>
+                </div>
+                <div class="flex-1 flex justify-between sm:justify-end">
+                    {% if transactions_page.has_previous %}
+                        <a href="?page={{ transactions_page.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                            Anterior
+                        </a>
+                    {% endif %}
+                    {% if transactions_page.has_next %}
+                        <a href="?page={{ transactions_page.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                            Próxima
+                        </a>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -5,6 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.conf import settings
 from django.utils import timezone
+# Importa o Paginator e as exceções relacionadas
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .forms import (
     CustomUserCreationForm, CustomAuthenticationForm, UserProfileAPIForm,
     TransactionForm, LimitBuyForm, LimitSellForm, MarketBuyForm, MarketSellForm
@@ -268,8 +270,31 @@ def open_orders_view(request):
 
 @login_required
 def transaction_history_view(request):
-    transactions = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
-    return render(request, 'core/transaction_history.html', {'transactions': transactions, 'page_title': 'Histórico de Transações'})
+    # Obtém a lista de transações completa e ordenada
+    transaction_list = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
+    
+    # Cria um objeto Paginator, com 15 transações por página
+    paginator = Paginator(transaction_list, 15) 
+    
+    # Obtém o número da página da query string da URL (ex: ?page=2)
+    page_number = request.GET.get('page')
+    
+    try:
+        # Tenta obter a página solicitada
+        transactions_page = paginator.page(page_number)
+    except PageNotAnInteger:
+        # Se 'page' não for um inteiro, entrega a primeira página.
+        transactions_page = paginator.page(1)
+    except EmptyPage:
+        # Se 'page' estiver fora do intervalo (ex: 9999), entrega a última página de resultados.
+        transactions_page = paginator.page(paginator.num_pages)
+        
+    # Passa o objeto 'page' para o template em vez da lista completa
+    return render(request, 'core/transaction_history.html', {
+        'transactions_page': transactions_page, 
+        'page_title': 'Histórico de Transações'
+    })
+
 
 @login_required
 @db_transaction.atomic
