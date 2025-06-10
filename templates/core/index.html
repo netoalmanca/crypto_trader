@@ -1,33 +1,74 @@
 {% extends "core/base.html" %}
+{% load static %}
+{% load i18n %}
 
-{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+{% block title %}Crypto Trader Pro - Sua Plataforma de Trading{% endblock %}
 
 {% block content %}
 <div class="text-center">
-    <h1 class="text-4xl sm:text-5xl font-extrabold text-blue-400 mb-6 animate-pulse">{{ page_title }}</h1>
-    <p class="text-lg sm:text-xl text-gray-300 mb-10">{{ message }}</p>
-    <div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl max-w-3xl mx-auto">
-        <h2 class="text-2xl sm:text-3xl font-semibold text-white mb-6">O que Vem por Aí:</h2>
-        <ul class="list-disc list-inside text-left text-gray-400 space-y-3 text-base sm:text-lg">
-            <li>Conectar com a API da Binance para buscar dados de mercado em tempo real.</li>
-            <li>Desenvolver o dashboard do usuário com visualização de portfólio e saldos.</li>
-            <li>Criar funcionalidade de compra e venda de criptomoedas.</li>
-            <li>Adicionar gráficos interativos de preços e histórico.</li>
-            <li>Implementar relatórios detalhados de análise de performance.</li>
-            <li>Integrar o Gemini para insights e auxílio em decisões estratégicas.</li>
-        </ul>
+    <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        Controle Total Sobre Seus Ativos Digitais
+    </h1>
+    <p class="text-lg sm:text-xl text-gray-400 mb-10 max-w-3xl mx-auto">
+        Conecte sua conta da Binance e tenha acesso a um dashboard poderoso com gráficos, análise de performance e ferramentas de negociação avançadas.
+    </p>
+    
+    <div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl max-w-4xl mx-auto">
+        <h2 class="text-2xl sm:text-3xl font-semibold text-white mb-8">Funcionalidades Principais</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                    <i class="fas fa-chart-pie fa-lg text-cyan-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Dashboard Analítico</h3>
+                    <p class="text-gray-400 mt-1">Visualize a distribuição do seu portfólio, acompanhe o histórico de valor e analise o lucro/prejuízo de cada ativo.</p>
+                </div>
+            </div>
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                    <i class="fas fa-exchange-alt fa-lg text-cyan-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Negociação Completa</h3>
+                    <p class="text-gray-400 mt-1">Execute ordens a mercado ou a limite diretamente pela nossa interface, com suporte total aos ambientes Testnet e Mainnet da Binance.</p>
+                </div>
+            </div>
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                    <i class="fas fa-shield-alt fa-lg text-cyan-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Segurança em Primeiro Lugar</h3>
+                    <p class="text-gray-400 mt-1">Suas chaves de API são criptografadas e você tem controle total sobre o ambiente de negociação, com avisos claros para operações na Mainnet.</p>
+                </div>
+            </div>
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                    <i class="fas fa-sync-alt fa-lg text-cyan-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Dados em Tempo Real</h3>
+                    <p class="text-gray-400 mt-1">Os preços dos ativos e as taxas de câmbio são atualizados em segundo plano, garantindo que suas análises sejam sempre precisas.</p>
+                </div>
+            </div>
+        </div>
+
         {% if not user.is_authenticated %}
-        <div class="mt-10 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <a href="{% url 'core:register' %}" class="btn-primary py-3 px-8 text-lg">Crie sua Conta</a>
-            <a href="{% url 'core:login' %}" class="btn-secondary py-3 px-8 text-lg">Acessar Conta</a>
+        <div class="mt-12 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+            <a href="{% url 'core:register' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Crie sua Conta Gratuitamente</a>
         </div>
         {% else %}
-        <div class="mt-10"><a href="{% url 'core:dashboard' %}" class="btn-primary py-3 px-8 text-lg">Acessar meu Dashboard</a></div>
+        <div class="mt-12">
+            <a href="{% url 'core:dashboard' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Acessar meu Dashboard</a>
+        </div>
         {% endif %}
     </div>
-    <div class="mt-16 p-6 bg-gray-800 rounded-xl shadow-lg">
-        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">Gemini e Tomada de Decisões Inteligentes</h3>
-        <p class="text-gray-400 text-base sm:text-lg leading-relaxed">A futura integração com o Gemini visa transformar a maneira como você interage com o mercado...</p>
+
+    <div class="mt-16 p-6 max-w-4xl mx-auto">
+        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">O Futuro é Inteligente: Próximos Passos</h3>
+        <p class="text-gray-400 text-lg leading-relaxed">Estamos trabalhando para integrar análises com IA (Gemini) para resumir notícias de mercado e fornecer insights, além de finalizar a sincronização completa do seu histórico de transações.</p>
     </div>
 </div>
 {% endblock %}

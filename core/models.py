@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from decimal import Decimal, ROUND_DOWN
 from django.utils import timezone
-from .encryption import encrypt, decrypt # Importar as funções de criptografia
+from .encryption import encrypt, decrypt
 
 FIAT_CURRENCY_CHOICES = [
     ('USD', 'Dólar Americano'),
@@ -54,46 +54,30 @@ class Cryptocurrency(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-    
     _binance_api_key = models.TextField(blank=True, help_text="Encrypted Binance API Key")
     _binance_api_secret = models.TextField(blank=True, help_text="Encrypted Binance API Secret")
-
     preferred_fiat_currency = models.CharField(
-        max_length=5,
-        choices=FIAT_CURRENCY_CHOICES,
-        default='BRL',
+        max_length=5, choices=FIAT_CURRENCY_CHOICES, default='BRL',
         help_text="Moeda fiduciária preferida do usuário para exibição de valores"
     )
-    
     use_testnet = models.BooleanField(
-        default=True,
-        verbose_name="Usar Ambiente de Teste (Testnet)",
+        default=True, verbose_name="Usar Ambiente de Teste (Testnet)",
         help_text="Se marcado, todas as operações de trade usarão a Testnet da Binance (sem fundos reais). Desmarque para usar sua conta real (Mainnet)."
     )
 
     @property
-    def binance_api_key(self):
-        return decrypt(self._binance_api_key)
-
+    def binance_api_key(self): return decrypt(self._binance_api_key)
     @binance_api_key.setter
-    def binance_api_key(self, value: str):
-        self._binance_api_key = encrypt(value)
-
+    def binance_api_key(self, value: str): self._binance_api_key = encrypt(value)
     @property
-    def binance_api_secret(self):
-        return decrypt(self._binance_api_secret)
-
+    def binance_api_secret(self): return decrypt(self._binance_api_secret)
     @binance_api_secret.setter
-    def binance_api_secret(self, value: str):
-        self._binance_api_secret = encrypt(value)
+    def binance_api_secret(self, value: str): self._binance_api_secret = encrypt(value)
 
     class Meta:
         verbose_name = "Perfil de Usuário"
         verbose_name_plural = "Perfis de Usuários"
-
-    def __str__(self):
-        return f"Perfil de {self.user.username}"
-
+    def __str__(self): return f"Perfil de {self.user.username}"
 
 class Holding(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='holdings')
@@ -103,26 +87,19 @@ class Holding(models.Model):
         max_digits=20, decimal_places=8, null=True, blank=True,
         help_text="Preço médio de compra na moeda de preço da criptomoeda (ex: USD)"
     )
-
     class Meta:
         verbose_name = "Posse de Cripto"
         verbose_name_plural = "Posses de Criptos"
         unique_together = ('user_profile', 'cryptocurrency')
         ordering = ['user_profile', 'cryptocurrency__name']
-
-    def __str__(self):
-        return f"{self.quantity} {self.cryptocurrency.symbol} de {self.user_profile.user.username}"
-
+    def __str__(self): return f"{self.quantity} {self.cryptocurrency.symbol} de {self.user_profile.user.username}"
     @property
     def cost_basis(self):
-        if self.quantity is not None and self.average_buy_price is not None:
-            return self.quantity * self.average_buy_price
+        if self.quantity is not None and self.average_buy_price is not None: return self.quantity * self.average_buy_price
         return Decimal('0.0')
-
     @property
     def current_market_value(self):
-        if self.cryptocurrency.current_price is not None and self.quantity is not None:
-            return self.quantity * self.cryptocurrency.current_price
+        if self.cryptocurrency.current_price is not None and self.quantity is not None: return self.quantity * self.cryptocurrency.current_price
         return None
 
 class Transaction(models.Model):
@@ -138,18 +115,13 @@ class Transaction(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, help_text="Data e hora do registro no sistema")
     binance_order_id = models.CharField(max_length=255, blank=True, null=True, help_text="ID da ordem na Binance (se aplicável)")
     notes = models.TextField(blank=True, null=True, help_text="Notas adicionais sobre a transação")
-
     class Meta:
         verbose_name = "Transação"
         verbose_name_plural = "Transações"
         ordering = ['-transaction_date', '-timestamp']
-
-    def __str__(self):
-        return f"{self.get_transaction_type_display()} de {self.quantity_crypto} {self.cryptocurrency.symbol} por {self.user_profile.user.username} em {self.transaction_date.strftime('%Y-%m-%d %H:%M')}"
-
+    def __str__(self): return f"{self.get_transaction_type_display()} de {self.quantity_crypto} {self.cryptocurrency.symbol} por {self.user_profile.user.username} em {self.transaction_date.strftime('%Y-%m-%d %H:%M')}"
     def save(self, *args, **kwargs):
-        if self.transaction_type in ['BUY', 'SELL'] and self.quantity_crypto and self.price_per_unit:
-            self.total_value = self.quantity_crypto * self.price_per_unit
+        if self.transaction_type in ['BUY', 'SELL'] and self.quantity_crypto and self.price_per_unit: self.total_value = self.quantity_crypto * self.price_per_unit
         super().save(*args, **kwargs)
 
 class ExchangeRate(models.Model):
@@ -157,12 +129,24 @@ class ExchangeRate(models.Model):
     to_currency = models.CharField(max_length=5, choices=FIAT_CURRENCY_CHOICES)
     rate = models.DecimalField(max_digits=20, decimal_places=8, help_text=f"Quantos 'TO_CURRENCY' valem 1 'FROM_CURRENCY'. Ex: Se FROM=USDT, TO=BRL, rate é o valor de 1 USDT em BRL.")
     last_updated = models.DateTimeField(auto_now=True)
-
     class Meta:
         unique_together = ('from_currency', 'to_currency')
         verbose_name = "Taxa de Câmbio"
         verbose_name_plural = "Taxas de Câmbio"
         ordering = ['from_currency', 'to_currency']
+    def __str__(self): return f"1 {self.from_currency} = {self.rate:.4f} {self.to_currency} (Atualizado: {self.last_updated.strftime('%Y-%m-%d %H:%M')})"
+
+class PortfolioSnapshot(models.Model):
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='snapshots')
+    total_value = models.DecimalField(max_digits=20, decimal_places=2, help_text="Valor total do portfólio na data do snapshot")
+    currency = models.CharField(max_length=5, choices=FIAT_CURRENCY_CHOICES, help_text="Moeda em que o valor total foi calculado")
+    date = models.DateField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "Snapshot do Portfólio"
+        verbose_name_plural = "Snapshots do Portfólio"
+        unique_together = ('user_profile', 'date')
+        ordering = ['-date']
 
     def __str__(self):
-        return f"1 {self.from_currency} = {self.rate:.4f} {self.to_currency} (Atualizado: {self.last_updated.strftime('%Y-%m-%d %H:%M')})"
+        return f"Snapshot de {self.user_profile.user.username} em {self.date}: {self.total_value} {self.currency}"

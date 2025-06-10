@@ -23,33 +23,35 @@
             <h2 class="text-xl font-semibold text-white mb-4">{% trans "Ações Rápidas" %}</h2>
             <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4 text-center">
                 <a href="{% url 'core:trade_limit_buy' %}" class="bg-cyan-600/20 hover:bg-cyan-600/40 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                    <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    <span>{% trans "Comprar Limite" %}</span>
-                </a>
+                    <i class="fas fa-chart-line fa-lg mb-1"></i><span>{% trans "Comprar Limite" %}</span></a>
                 <a href="{% url 'core:trade_limit_sell' %}" class="bg-red-600/20 hover:bg-red-600/40 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                     <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" /></svg>
-                    <span>{% trans "Vender Limite" %}</span>
-                </a>
+                     <i class="fas fa-hand-holding-usd fa-lg mb-1"></i><span>{% trans "Vender Limite" %}</span></a>
                 <a href="{% url 'core:open_orders' %}" class="bg-blue-600/20 hover:bg-blue-600/40 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                    <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                    <span>{% trans "Ordens Abertas" %}</span>
-                </a>
+                    <i class="fas fa-list-alt fa-lg mb-1"></i><span>{% trans "Ordens Abertas" %}</span></a>
                 <a href="{% url 'core:trade_market_buy' %}" class="bg-gray-700/50 hover:bg-gray-600 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                    <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    <span>{% trans "Comprar Mercado" %}</span>
-                </a>
+                    <i class="fas fa-bolt fa-lg mb-1"></i><span>{% trans "Comprar Mercado" %}</span></a>
                 <a href="{% url 'core:trade_market_sell' %}" class="bg-gray-700/50 hover:bg-gray-600 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                     <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    <span>{% trans "Vender Mercado" %}</span>
-                </a>
+                     <i class="fas fa-dollar-sign fa-lg mb-1"></i><span>{% trans "Vender Mercado" %}</span></a>
                 <a href="{% url 'core:add_transaction' %}" class="bg-gray-700/50 hover:bg-gray-600 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                    <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    <span>{% trans "Transação Manual" %}</span>
-                </a>
+                    <i class="fas fa-plus-circle fa-lg mb-1"></i><span>{% trans "Transação Manual" %}</span></a>
                 <a href="{% url 'core:transaction_history' %}" class="bg-gray-700/50 hover:bg-gray-600 text-white font-medium py-3 px-2 rounded-lg transition duration-300 flex flex-col items-center justify-center">
-                    <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <span>{% trans "Histórico" %}</span>
-                </a>
+                    <i class="fas fa-history fa-lg mb-1"></i><span>{% trans "Histórico" %}</span></a>
+            </div>
+        </div>
+
+        <!-- NOVA SEÇÃO: Gráficos -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
+            <div class="lg:col-span-2 bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">Distribuição de Ativos</h2>
+                <div class="h-64 md:h-80 flex items-center justify-center">
+                    <canvas id="portfolioPieChart"></canvas>
+                </div>
+            </div>
+            <div class="lg:col-span-3 bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">Histórico do Portfólio (Últimos 30 dias)</h2>
+                <div class="h-64 md:h-80">
+                    <canvas id="portfolioHistoryChart"></canvas>
+                </div>
             </div>
         </div>
 
@@ -71,9 +73,8 @@
                     </thead>
                     <tbody>
                         {% for item in holdings %}
-                        {% if item.holding.quantity > 0 %}
                         <tr class="border-b border-gray-700 hover:bg-gray-700/50">
-                            <th scope="row" class="px-6 py-4 font-medium whitespace-nowrap">
+                            <td class="px-6 py-4 font-medium whitespace-nowrap">
                                 <a href="{% url 'core:cryptocurrency_detail' item.holding.cryptocurrency.symbol %}" class="flex items-center group">
                                     {% if item.holding.cryptocurrency.logo_url %}<img src="{{ item.holding.cryptocurrency.logo_url }}" class="h-8 w-8 mr-3 rounded-full">{% endif %}
                                     <div>
@@ -81,7 +82,7 @@
                                         <div class="font-normal text-gray-500">{{ item.holding.cryptocurrency.symbol }}</div>
                                     </div>
                                 </a>
-                            </th>
+                            </td>
                             <td class="px-6 py-4 text-right">{{ item.holding.quantity|floatformat:8|default:"-" }}</td>
                             <td class="px-6 py-4 text-right">{{ item.average_buy_price_display|floatformat:2|intcomma|default:"-" }} <span class="text-gray-500">{{ item.display_currency }}</span></td>
                             <td class="px-6 py-4 text-right">{{ item.current_price_display|floatformat:2|intcomma|default:"-" }} <span class="text-gray-500">{{ item.display_currency }}</span></td>
@@ -91,7 +92,6 @@
                                 {% if item.profit_loss_percent_display is not None %}{{ item.profit_loss_percent_display|floatformat:2 }}%{% else %}-{% endif %}
                             </td>
                         </tr>
-                        {% endif %}
                         {% empty %}
                         <tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">{% trans "Você ainda não possui criptomoedas." %}</td></tr>
                         {% endfor %}
@@ -101,4 +101,79 @@
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pieData = JSON.parse('{{ pie_chart_data_json|escapejs }}');
+    const lineData = JSON.parse('{{ line_chart_data_json|escapejs }}');
+    const portfolioCurrency = '{{ portfolio_currency }}';
+
+    // Gráfico de Pizza (Donut)
+    const pieCtx = document.getElementById('portfolioPieChart');
+    if (pieCtx && pieData.data.length > 0) {
+        new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: pieData.labels,
+                datasets: [{
+                    label: 'Valor do Portfólio',
+                    data: pieData.data,
+                    backgroundColor: [
+                        '#06b6d4', '#ef4444', '#f97316', '#eab308', 
+                        '#84cc16', '#22c55e', '#14b8a6', '#8b5cf6', '#d946ef'
+                    ],
+                    borderColor: '#1e293b', // Cor do background principal para espaçamento
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                cutout: '60%'
+            }
+        });
+    } else if (pieCtx) {
+        pieCtx.getContext('2d').fillText("Sem dados para exibir.", 10, 50);
+    }
+
+    // Gráfico de Linha (Histórico)
+    const lineCtx = document.getElementById('portfolioHistoryChart');
+    if (lineCtx && lineData.data.length > 0) {
+        new Chart(lineCtx, {
+            type: 'line',
+            data: {
+                labels: lineData.labels,
+                datasets: [{
+                    label: `Valor do Portfólio (${portfolioCurrency})`,
+                    data: lineData.data,
+                    fill: true,
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6, 182, 212, 0.2)',
+                    tension: 0.1,
+                    pointBackgroundColor: '#06b6d4',
+                    pointRadius: 2,
+                    pointHoverRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    x: { ticks: { color: '#9ca3af' }, grid: { display: false } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1f2937', titleColor: '#ffffff',
+                        bodyColor: '#d1d5db', displayColors: false
+                    }
+                }
+            }
+        });
+    } else if (lineCtx) {
+        lineCtx.getContext('2d').fillText("Sem histórico de portfólio para exibir.", 10, 50);
+    }
+});
+</script>
 {% endblock %}

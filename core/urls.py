@@ -14,6 +14,8 @@ urlpatterns = [
     
     # Profile, Info & Transactions
     path('profile/api-keys/', views.update_api_keys_view, name='update_api_keys'),
+    path('profile/reset/', views.reset_portfolio_view, name='reset_portfolio'), 
+    path('profile/recalculate/', views.recalculate_holdings_view, name='recalculate_holdings'), # NOVA ROTA
     path('cryptocurrencies/', views.cryptocurrency_list_view, name='cryptocurrency_list'),
     path('cryptocurrency/<str:symbol>/', views.cryptocurrency_detail_view, name='cryptocurrency_detail'),
     path('transactions/history/', views.transaction_history_view, name='transaction_history'),
@@ -21,11 +23,9 @@ urlpatterns = [
     path('transactions/sync/', views.sync_binance_trades_view, name='sync_trades'),
     path('open-orders/', views.open_orders_view, name='open_orders'),
     
-    # Trading (Market) - ROTAS RESTAURADAS
+    # Trading
     path('trade/market-buy/', views.trade_market_buy_view, name='trade_market_buy'),
     path('trade/market-sell/', views.trade_market_sell_view, name='trade_market_sell'),
-
-    # Trading (Limit)
     path('trade/limit-buy/', views.trade_limit_buy_view, name='trade_limit_buy'),
     path('trade/limit-sell/', views.trade_limit_sell_view, name='trade_limit_sell'),
 ]

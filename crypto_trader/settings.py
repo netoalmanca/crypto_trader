@@ -105,10 +105,15 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULE = {
     'update-crypto-prices-every-minute': {
         'task': 'core.tasks.update_all_cryptocurrency_prices',
-        'schedule': 60.0,
+        'schedule': 60.0, # Roda a cada 60 segundos
     },
     'update-exchange-rates-every-minute': {
         'task': 'core.tasks.update_exchange_rates',
-        'schedule': 60.0,
+        'schedule': 60.0, # Roda a cada 60 segundos
+    },
+    # NOVA TAREFA AGENDADA
+    'create-daily-snapshots': {
+        'task': 'core.tasks.create_daily_portfolio_snapshots',
+        'schedule': crontab(hour=23, minute=55), # Roda todo dia às 23:55
     },
 }

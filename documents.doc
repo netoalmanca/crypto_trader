@@ -1,111 +1,129 @@
-Visão Geral
-O "Crypto Trader Pro" é uma aplicação web construída com Django, projetada para ser um painel de gerenciamento e negociação de portfólio de criptomoedas. Ela se integra com a API da Binance para buscar dados de mercado e executar ordens de compra e venda.
+Visão Geral do Projeto: Crypto Trader Pro (Atualizado)
+1. Visão Geral
+O "Crypto Trader Pro" é uma aplicação web robusta, construída com Django, projetada para ser um painel completo de gerenciamento e negociação de portfólio de criptomoedas. A aplicação se integra diretamente com a API da Binance, permitindo que os usuários conectem suas contas para buscar dados de mercado, executar ordens de negociação em tempo real e analisar o desempenho de seus ativos.
 
-Arquitetura e Componentes Principais
+2. Arquitetura e Componentes Principais
 Backend: Django
 
-Frontend: Templates Django com Tailwind CSS para estilização.
+Frontend: Templates Django renderizados no servidor com Tailwind CSS para estilização e Chart.js para visualização de dados.
 
-Banco de Dados: SQLite (para desenvolvimento).
+Banco de Dados: SQLite (configurado para desenvolvimento).
 
-Tarefas em Segundo Plano: Celery com Redis como broker para atualização automática de dados.
+Tarefas em Segundo Plano: Celery com Redis como message broker para atualização assíncrona e periódica de preços de mercado e taxas de câmbio.
 
-API Externa: API da Binance (atualmente configurada para a Testnet).
+API Externa: API da Binance, com suporte para os ambientes de Testnet e Mainnet.
 
-Funcionalidades Implementadas
-Autenticação e Perfil de Usuário:
+3. Funcionalidades Implementadas
+A plataforma já conta com um conjunto abrangente de funcionalidades prontas para uso:
 
-Sistema completo de registro, login e logout de usuários.
+Autenticação e Perfil de Usuário
+Sistema completo de registro, login e logout.
 
-Criação automática de um UserProfile para cada usuário.
+Criação automática de um perfil de usuário (UserProfile) no momento do registro.
 
-Página dedicada para os usuários configurarem suas próprias chaves API da Binance e definirem sua moeda fiduciária preferida (BRL, USD, EUR, etc.).
+Página de Configurações Segura: Uma área dedicada (/profile/api-keys/) onde os usuários podem:
 
-Gerenciamento de Portfólio (Dashboard):
+Inserir e atualizar suas chaves de API e Segredo da Binance.
 
-O dashboard exibe um resumo do valor total do portfólio, convertido para a moeda preferida do usuário.
+Criptografia Automática: As chaves são criptografadas com a biblioteca cryptography (usando o algoritmo Fernet) antes de serem salvas no banco de dados, garantindo que não fiquem expostas.
 
-A tabela "Minhas Posses" detalha cada criptomoeda no portfólio do usuário, mostrando:
+Seleção de Ambiente (Testnet/Mainnet): O usuário pode escolher ativamente se suas operações de trade serão executadas no ambiente de teste (Testnet) ou no ambiente real (Mainnet). A interface exibe avisos visuais claros e proeminentes para alertar o usuário quando o modo Mainnet está ativo.
 
-Quantidade.
+Definir sua moeda fiduciária preferida (BRL, USD, EUR) para visualização de valores.
 
-Preço Médio de Compra, Preço Atual, Valor Atual e Lucro/Prejuízo (L/P), todos convertidos e exibidos na moeda preferida do usuário.
+Dashboard e Análise de Portfólio
+Visão Geral Consolidada: O dashboard principal exibe o valor total do portfólio, convertido para a moeda preferida do usuário.
 
-Percentual de Lucro/Prejuízo.
+Gráficos de Análise:
 
-A conversão de moeda é realizada usando taxas de câmbio (ex: USDT para BRL) que são buscadas e armazenadas no banco de dados.
+Distribuição de Ativos (Gráfico de Pizza): Um gráfico do tipo "donut" mostra a distribuição percentual de cada criptomoeda com base em seu valor atual no portfólio.
 
-Dados de Mercado:
+Histórico de Valor (Gráfico de Linha): Um gráfico de linha exibe a evolução do valor total do portfólio nos últimos 30 dias, utilizando snapshots diários salvos automaticamente.
 
+Tabela de Posses Detalhada: Uma tabela exibe cada ativo do portfólio com informações cruciais, todas convertidas para a moeda preferida do usuário:
+
+Quantidade
+
+Preço Médio de Compra
+
+Preço Atual (atualizado via Celery)
+
+Valor Atual
+
+Lucro/Prejuízo (L/P) em valor monetário e percentual.
+
+Dados de Mercado e Resiliência
 Atualização Automática (Celery):
 
-Uma tarefa Celery (update_all_cryptocurrency_prices) é executada a cada 1 minuto para buscar os preços atuais das criptomoedas cadastradas (ex: BTCUSDT, ETHUSDT) e salvar no banco de dados.
+update_all_cryptocurrency_prices: Tarefa executada a cada minuto para buscar e salvar os preços atuais das criptomoedas.
 
-Uma segunda tarefa Celery (update_exchange_rates) é executada a cada 1 minuto para buscar taxas de câmbio (ex: USDTBRL) e salvá-las no banco de dados.
+update_exchange_rates: Tarefa executada a cada minuto para buscar e salvar as taxas de câmbio (ex: USDT para BRL).
 
-Lista de Criptomoedas: A página /cryptocurrencies/ exibe uma lista de todas as criptomoedas cadastradas, enriquecida com dados de 24h (variação de preço, volume, máxima e mínima) obtidos em tempo real da API da Binance.
+create_daily_portfolio_snapshots: Tarefa diária para salvar o valor total do portfólio, alimentando o gráfico de histórico.
 
-Página de Detalhes: Cada criptomoeda tem uma página de detalhes (/cryptocurrency/<symbol>/) que exibe um gráfico interativo do histórico de preços dos últimos 90 dias, utilizando Chart.js.
+Resiliência das Tarefas: As tarefas Celery foram aprimoradas com mecanismos de retentativa automática (autoretry_for) e backoff exponencial, tornando o sistema robusto contra falhas temporárias de rede ou da API.
 
-Negociação via API (Testnet da Binance):
+Lista de Criptomoedas e Detalhes:
 
-Compra a Mercado: Uma página dedicada permite aos usuários comprar criptomoedas. Eles podem optar por:
+Página (/cryptocurrencies/) que lista as criptomoedas com dados de variação 24h.
 
-Especificar a quantidade da criptomoeda a ser comprada (ex: 0.01 BTC).
+Página de detalhe para cada cripto com um gráfico interativo do histórico de preços (últimos 90 dias).
 
-Especificar o valor da moeda de cotação a ser gasto (ex: comprar 100 USDT de BTC).
+Funcionalidades de Negociação (Trading)
+Ordens a Mercado (Market Orders):
 
-Venda a Mercado: Uma página dedicada permite aos usuários vender suas criptomoedas. Eles podem optar por:
+Funcionalidade completa para compra e venda a mercado.
 
-Vender uma quantidade específica da criptomoeda.
+O usuário pode optar por definir a quantidade da criptomoeda ou o valor monetário a ser gasto/recebido.
 
-Vender para receber um valor aproximado na moeda de cotação.
+Ordens Limite (Limit Orders):
 
-Ambas as funcionalidades usam as chaves API do perfil do usuário, validam as regras da Binance (LOT_SIZE, MIN_NOTIONAL) e registram a transação localmente após a execução bem-sucedida.
+Funcionalidade completa para criar ordens de compra e venda a um preço específico.
 
-Histórico de Transações:
+Gerenciamento de Ordens: Uma página (/open-orders/) permite visualizar e cancelar ordens que ainda não foram executadas.
 
-Todas as transações (manuais ou via API) são registradas e podem ser visualizadas em uma página de histórico, mostrando tipo, data, cripto, quantidade, preço e valor.
+Gerenciamento de Transações
+Adição Manual: Formulário para registrar transações de compra ou venda manualmente.
 
-Próximos Passos Sugeridos
-O projeto atingiu um estado funcional muito bom. Os próximos passos lógicos se concentram em mover da Testnet para a produção, melhorar a segurança e a robustez, e adicionar funcionalidades de análise mais avançadas.
+Sincronização com a Binance (Parcial): Botão na página de histórico que prepara o terreno para a sincronização completa das transações da conta Binance do usuário.
 
-Segurança das Chaves API (Prioridade Máxima):
+4. Próximos Passos Sugeridos
+Com a base sólida já estabelecida, os próximos passos se concentram em finalizar funcionalidades de conveniência e expandir os recursos de análise.
 
-O que: Implementar criptografia para os campos binance_api_key e binance_api_secret no modelo UserProfile. Atualmente, eles estão armazenados em texto plano, o que é um risco de segurança inaceitável para chaves da API principal.
+Implementação Completa da Sincronização de Histórico (sync_binance_trades_view)
 
-Como: Reavaliar o uso de bibliotecas como django-cryptography ou django-fernet-fields, ou implementar uma solução de criptografia customizada.
+O que: Atualmente, a função existe, mas sua lógica interna precisa ser totalmente desenvolvida. O objetivo é permitir que um novo usuário clique em "Sincronizar" e o sistema busque todo o seu histórico de negociações da Binance, populando automaticamente as tabelas de Transações e Posses.
 
-Habilitar Trading na Mainnet (API Principal):
+Como: Iterar sobre todos os pares de criptomoedas que o usuário possui na Binance. Para cada par, usar o endpoint get_my_trades da API. Implementar uma lógica para evitar a duplicação de transações já existentes e para recalcular corretamente o preço médio das posses.
 
-O que: Permitir que o usuário escolha entre negociar na Testnet ou na Mainnet.
+Melhorias na Interface e Experiência do Usuário (UI/UX)
 
-Como: Adicionar um campo ao UserProfile (ex: use_testnet_api) e um controle na interface do usuário (ex: na página de configuração de API). As views de trade (trade_market_buy_view, trade_market_sell_view) devem então usar essa configuração do perfil para inicializar o cliente Binance (Client(..., testnet=user_profile.use_testnet_api)). Adicionar avisos claros na UI quando o modo Mainnet estiver ativo.
-
-Melhorar a Resiliência das Tarefas Celery:
-
-O que: Adicionar mais tratamento de erros e retentativas às tarefas Celery.
-
-Como: Usar os mecanismos de retentativa automática do Celery (autoretry_for, retry_kwargs) na definição das tarefas em core/tasks.py para lidar com falhas temporárias de rede ou da API da Binance.
-
-Implementar Ordens Limite (Limit Orders):
-
-O que: Permitir que os usuários coloquem ordens de compra e venda a um preço específico, em vez de apenas ordens a mercado.
-
-Como: Criar novos formulários e views (trade_limit_buy_view, trade_limit_sell_view) que incluam um campo para o preço. Isso também exigirá uma nova seção no dashboard para visualizar e gerenciar ordens abertas.
-
-Refinar o Dashboard e a Análise de Portfólio:
-
-O que: Adicionar gráficos ao dashboard e métricas de desempenho mais avançadas.
+O que: Aprimorar a fluidez e a performance da aplicação em páginas com muitos dados.
 
 Como:
 
-Usar Chart.js para criar um gráfico de pizza mostrando a distribuição do portfólio por ativo.
+Paginação: Adicionar paginação nas tabelas de "Histórico de Transações" e "Lista de Criptomoedas" para evitar o carregamento de centenas de itens de uma só vez.
 
-Criar um gráfico de linha mostrando a evolução do valor total do portfólio ao longo do tempo. Isso exigiria salvar "snapshots" diários do valor do portfólio em um novo modelo.
+Feedback Visual: Adicionar indicadores de carregamento (spinners) em botões que disparam ações de API (Comprar, Vender, Sincronizar) para que o usuário saiba que a ação está em andamento.
 
-Calcular e exibir o L/P (Lucro/Prejuízo) Total do portfólio.
+Relatórios e Análise Avançada de Performance
 
-Com base nesta análise, sugiro que o próximo passo seja o Item 1: Segurança das Chaves API, pois é um pré-requisito fundamental para qualquer funcionalidade que use chaves reais.
+O que: Criar uma nova seção de "Relatórios" para oferecer insights mais profundos sobre o desempenho do portfólio.
 
-Você gostaria de prosseguir com a implementação da criptografia das chaves API?
+Como:
+
+Cálculo de P/L Geral: Exibir o Lucro/Prejuízo total consolidado de todo o portfólio.
+
+Métricas de Performance: Calcular e exibir métricas como o Retorno Sobre o Investimento (ROI) total.
+
+Exportação de Dados: Permitir que o usuário exporte seu histórico de transações para um arquivo CSV.
+
+Integração com IA (Gemini) - Visão de Futuro
+
+O que: Utilizar as capacidades da API do Gemini para fornecer análises e informações contextuais.
+
+Como (Fase Inicial):
+
+Análise de Notícias: Em cada página de detalhe de uma criptomoeda, adicionar uma seção que usa a API do Gemini para buscar e resumir as notícias mais recentes sobre aquele ativo.
+
+"Explique este Ativo": Um botão que envia o nome da criptomoeda para o Gemini e exibe uma explicação simples sobre seu propósito e tecnologia, ajudando usuários iniciantes.
