@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load l10n %}
+{% load i18n %}
 
 {% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
 
@@ -8,21 +8,17 @@
     <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
     
     <div class="text-sm text-yellow-300 bg-yellow-700 bg-opacity-30 p-3 rounded-md mb-6">
-        <p><strong>Atenção:</strong> Esta funcionalidade de negociação interage com a <strong>Testnet da Binance</strong>.</p>
-        <p>Certifique-se de que suas chaves API configuradas no perfil têm permissão para "Enable Spot & Margin Trading" na Testnet.</p>
-        <p>Ordens executadas aqui usarão seus fundos da Testnet.</p>
-        <p class="mt-2">A Binance possui regras de trading como tamanho mínimo de lote (LOT_SIZE) e valor mínimo nocional (MIN_NOTIONAL) por ordem. Se sua ordem falhar, verifique se os valores atendem a esses requisitos para o par selecionado.</p>
+        <p><strong>Atenção:</strong> Esta funcionalidade interage com a <strong>Testnet da Binance</strong>.</p>
+        <p class="mt-2">Ordens a mercado são executadas imediatamente ao melhor preço disponível. O preço final pode variar.</p>
+        <p class="mt-2">A Binance aplica regras como valor mínimo de ordem (MIN_NOTIONAL). Se sua ordem falhar, tente um valor maior (geralmente acima de 10 USDT).</p>
     </div>
 
-    <form method="post" novalidate id="tradeForm">
+    <form method="post" novalidate id="marketBuyForm">
         {% csrf_token %}
         
         <div class="mb-4">
-            <label for="{{ form.cryptocurrency.id_for_label }}" class="form-label">{{ form.cryptocurrency.label_tag }} {% if form.cryptocurrency.field.required %}<span class="text-red-400">*</span>{% endif %}</label>
+            <label for="{{ form.cryptocurrency.id_for_label }}" class="form-label">{{ form.cryptocurrency.label_tag }}{% if form.cryptocurrency.field.required %}<span class="text-red-400">*</span>{% endif %}</label>
             {{ form.cryptocurrency }}
-            {% if form.cryptocurrency.help_text %}
-                <p class="mt-1 text-xs text-gray-300">{{ form.cryptocurrency.help_text|safe }}</p> {# Escurecido para melhor contraste #}
-            {% endif %}
             {% for error in form.cryptocurrency.errors %}
                 <p class="mt-1 text-xs text-red-400">{{ error }}</p>
             {% endfor %}
@@ -43,23 +39,17 @@
             {% endfor %}
         </div>
 
-        <div id="quantity_field_group" class="mb-4">
-            <label for="{{ form.quantity.id_for_label }}" class="form-label">{{ form.quantity.label_tag }} {% if form.quantity.field.required and form.buy_type.value == 'QUANTITY' %}<span class="text-red-400">*</span>{% endif %}</label>
+        <div id="quantity_field_group" class="mb-4" style="display: none;">
+            <label for="{{ form.quantity.id_for_label }}" class="form-label">{{ form.quantity.label_tag }}</label>
             {{ form.quantity }}
-            {% if form.quantity.help_text %}
-                <p class="mt-1 text-xs text-gray-300">{{ form.quantity.help_text|safe }}</p>
-            {% endif %}
             {% for error in form.quantity.errors %}
                 <p class="mt-1 text-xs text-red-400">{{ error }}</p>
             {% endfor %}
         </div>
 
-        <div id="quote_quantity_field_group" class="mb-4">
-            <label for="{{ form.quote_quantity.id_for_label }}" class="form-label">{{ form.quote_quantity.label_tag }} {% if form.quote_quantity.field.required and form.buy_type.value == 'QUOTE_QUANTITY' %}<span class="text-red-400">*</span>{% endif %}</label>
+        <div id="quote_quantity_field_group" class="mb-4" style="display: none;">
+            <label for="{{ form.quote_quantity.id_for_label }}" class="form-label">{{ form.quote_quantity.label_tag }}</label>
             {{ form.quote_quantity }}
-            {% if form.quote_quantity.help_text %}
-                <p class="mt-1 text-xs text-gray-300">{{ form.quote_quantity.help_text|safe }}</p>
-            {% endif %}
             {% for error in form.quote_quantity.errors %}
                 <p class="mt-1 text-xs text-red-400">{{ error }}</p>
             {% endfor %}
@@ -75,7 +65,7 @@
         {% endif %}
         
         <div class="mt-6 sm:mt-8">
-            <button type="submit" class="btn-primary">Executar Compra a Mercado</button>
+            <button type="submit" class="btn-primary w-full bg-cyan-600 hover:bg-cyan-500">Executar Compra a Mercado</button>
         </div>
     </form>
     <p class="mt-6 text-center text-sm text-gray-400">
@@ -96,11 +86,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectedType === 'QUANTITY') {
             quantityFieldGroup.style.display = 'block';
             quoteQuantityFieldGroup.style.display = 'none';
-            if(quoteQuantityInput) quoteQuantityInput.value = ''; // Limpa o campo não usado
+            if(quoteQuantityInput) quoteQuantityInput.value = '';
         } else if (selectedType === 'QUOTE_QUANTITY') {
             quantityFieldGroup.style.display = 'none';
             quoteQuantityFieldGroup.style.display = 'block';
-            if(quantityInput) quantityInput.value = ''; // Limpa o campo não usado
+            if(quantityInput) quantityInput.value = '';
         }
     }
 
@@ -108,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
         radio.addEventListener('change', toggleFields);
     });
 
-    // Estado inicial
+    // Run on page load to set initial state
     toggleFields();
 });
 </script>

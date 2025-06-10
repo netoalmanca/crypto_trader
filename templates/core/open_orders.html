@@ -1,0 +1,72 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-white mb-6">{{ page_title }}</h1>
+
+        <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm text-left text-gray-300">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-700/50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Data</th>
+                            <th scope="col" class="px-6 py-3">Par</th>
+                            <th scope="col" class="px-6 py-3">Tipo</th>
+                            <th scope="col" class="px-6 py-3">Lado</th>
+                            <th scope="col" class="px-6 py-3 text-right">Preço</th>
+                            <th scope="col" class="px-6 py-3 text-right">Quantidade</th>
+                            <th scope="col" class="px-6 py-3 text-right">Executado</th>
+                            <th scope="col" class="px-6 py-3 text-right">Total</th>
+                            <th scope="col" class="px-6 py-3 text-center">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in open_orders %}
+                        <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                            <td class="px-6 py-4">
+                                <!-- Usa o objeto datetime pré-formatado da view -->
+                                {{ order.time_dt|date:"d/m/Y H:i" }}
+                            </td>
+                            <td class="px-6 py-4 font-semibold text-white">{{ order.symbol }}</td>
+                            <td class="px-6 py-4">{{ order.type }}</td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 font-semibold leading-tight rounded-full
+                                    {% if order.side == 'BUY' %} bg-green-900 text-green-300 {% else %} bg-red-900 text-red-300 {% endif %}">
+                                    {{ order.side }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-right">{{ order.price|floatformat:2|intcomma }}</td>
+                            <td class="px-6 py-4 text-right">{{ order.origQty|floatformat:-8 }}</td>
+                            <td class="px-6 py-4 text-right">{{ order.executedQty|floatformat:-8 }}</td>
+                            <td class="px-6 py-4 text-right">
+                                <!-- Usa o valor total pré-calculado da view -->
+                                {{ order.total_value|floatformat:2|intcomma }}
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <form method="post" action="{% url 'core:open_orders' %}" onsubmit="return confirm('Tem a certeza que deseja cancelar esta ordem?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="order_id" value="{{ order.orderId }}">
+                                    <input type="hidden" name="symbol" value="{{ order.symbol }}">
+                                    <button type="submit" class="text-red-400 hover:text-red-300 font-semibold">
+                                        Cancelar
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+                                Não há ordens abertas no momento.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

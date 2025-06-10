@@ -1,108 +1,47 @@
 {% extends "core/base.html" %}
-{% load static %} 
-{% load l10n %}
-
-{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+{% load i18n %}
+{% load humanize %}
 
 {% block content %}
-<div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl">
-    <div class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl sm:text-4xl font-bold text-blue-400">{{ page_title }}</h1>
-    </div>
-
-    {% if cryptocurrencies_data %}
-        <div class="overflow-x-auto rounded-lg shadow">
-            <table class="min-w-full leading-normal">
-                <thead class="bg-gray-700">
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-white mb-6">{{ page_title }}</h1>
+    <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-left text-gray-300">
+                <thead class="text-xs text-gray-400 uppercase bg-gray-700/50">
                     <tr>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Logo</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Símbolo</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Nome</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Atual</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Var. 24h (%)</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Máx. 24h</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Mín. 24h</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Volume 24h (Base)</th>
-                        <th scope="col" class="px-3 py-3 border-b-2 border-gray-600 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">Última Atualização API</th>
+                        <th scope="col" class="px-6 py-3">Ativo</th>
+                        <th scope="col" class="px-6 py-3 text-right">Preço Atual</th>
+                        <th scope="col" class="px-6 py-3 text-right">Variação 24h (%)</th>
+                        <!-- Adicione outras colunas se desejar, como Volume -->
                     </tr>
                 </thead>
-                <tbody class="bg-gray-750">
-                    {% for crypto_data_item in cryptocurrencies_data %}
-                    <tr class="hover:bg-gray-600 transition-colors duration-150">
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm">
-                            {% if crypto_data_item.logo_url %}
-                                <img src="{{ crypto_data_item.logo_url }}" alt="Logo {{ crypto_data_item.name }}" class="w-8 h-8 rounded-full object-contain" 
-                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div style="display:none;" class="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-xs">{{ crypto_data_item.symbol|slice:":2" }}</div>
-                            {% else %}
-                                <div class="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-sm">{{ crypto_data_item.symbol|slice:":2" }}</div>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm">
-                            <a href="{% url 'core:cryptocurrency_detail' symbol=crypto_data_item.symbol %}" class="text-blue-400 hover:text-blue-300 font-semibold whitespace-no-wrap">
-                                {{ crypto_data_item.symbol }}
+                <tbody>
+                    {% for item in cryptocurrencies_data %}
+                    <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                        <td class="px-6 py-4 font-medium whitespace-nowrap">
+                            <!-- **CORREÇÃO**: Acessa o objeto da base de dados através de `item.db_instance` -->
+                            <a href="{% url 'core:cryptocurrency_detail' item.db_instance.symbol %}" class="flex items-center group">
+                                {% if item.db_instance.logo_url %}
+                                    <img src="{{ item.db_instance.logo_url }}" class="h-8 w-8 mr-3 rounded-full">
+                                {% endif %}
+                                <div>
+                                    <div class="text-base font-semibold text-white group-hover:text-cyan-400">{{ item.db_instance.name }}</div>
+                                    <div class="font-normal text-gray-500">{{ item.db_instance.symbol }}</div>
+                                </div>
                             </a>
                         </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm">
-                             <a href="{% url 'core:cryptocurrency_detail' symbol=crypto_data_item.symbol %}" class="text-gray-100 hover:text-blue-300 whitespace-no-wrap">
-                                {{ crypto_data_item.name }}
-                            </a>
+                        <td class="px-6 py-4 text-right">
+                            {{ item.db_instance.current_price|floatformat:item.db_instance.get_price_decimals|intcomma }} {{ item.db_instance.price_currency }}
                         </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-right">
-                            {% if crypto_data_item.current_price is not None %} 
-                                <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ crypto_data_item.current_price|floatformat:crypto_data_item.db_instance.get_price_decimals }} {{ crypto_data_item.price_currency }}</p>
-                            {% else %}
-                                <p class="text-gray-500 whitespace-no-wrap">N/D</p>
-                            {% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-right">
-                            {% if crypto_data_item.price_change_percent_24h is not None %}
-                                <span class="{% if crypto_data_item.price_change_percent_24h > 0 %}text-green-400{% elif crypto_data_item.price_change_percent_24h < 0 %}text-red-400{% else %}text-gray-300{% endif %}">
-                                    {{ crypto_data_item.price_change_percent_24h|floatformat:2 }}%
-                                </span>
-                            {% else %}<span class="text-gray-500">N/D</span>{% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-right">
-                            {% if crypto_data_item.high_price_24h is not None %}
-                                <p class="text-gray-300 whitespace-no-wrap">{{ crypto_data_item.high_price_24h|floatformat:crypto_data_item.db_instance.get_price_decimals }}</p>
-                            {% else %}<p class="text-gray-500">N/D</p>{% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-right">
-                            {% if crypto_data_item.low_price_24h is not None %}
-                                <p class="text-gray-300 whitespace-no-wrap">{{ crypto_data_item.low_price_24h|floatformat:crypto_data_item.db_instance.get_price_decimals }}</p>
-                            {% else %}<p class="text-gray-500">N/D</p>{% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-right">
-                            {% if crypto_data_item.volume_24h is not None %}
-                                <p class="text-gray-300 whitespace-no-wrap">{{ crypto_data_item.volume_24h|floatformat:2 }}</p>
-                                <p class="text-xs text-gray-500">({{ crypto_data_item.symbol }})</p>
-                            {% else %}<p class="text-gray-500">N/D</p>{% endif %}
-                        </td>
-                        <td class="px-3 py-4 border-b border-gray-600 text-sm text-center">
-                            {% if crypto_data_item.last_updated %}
-                                <p class="text-gray-400 whitespace-no-wrap" title="{{ crypto_data_item.last_updated|date:"d/m/Y H:i:s e" }}">{{ crypto_data_item.last_updated|timesince }} atrás</p>
-                            {% else %}
-                                <p class="text-gray-500 whitespace-no-wrap">N/D</p>
-                            {% endif %}
+                        <td class="px-6 py-4 text-right {% if item.price_change_percent_24h > 0 %}text-green-400{% elif item.price_change_percent_24h < 0 %}text-red-400{% endif %}">
+                            {{ item.price_change_percent_24h|floatformat:2 }}%
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    {% else %}
-        <div class="text-center py-10 bg-gray-750 rounded-lg">
-            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2zm3-8V3m12 18v-2" />
-            </svg>
-            <h3 class="mt-2 text-lg font-medium text-white">Nenhuma Criptomoeda Cadastrada</h3>
-            <p class="mt-1 text-sm text-gray-400">Comece adicionando algumas criptomoedas através da interface de administração.</p>
-            <p class="mt-1 text-sm text-gray-400">Se você já adicionou, verifique os logs do servidor para possíveis erros na busca de dados da API.</p>
-        </div>
-    {% endif %}
-    <div class="mt-8">
-        <a href="{% url 'core:dashboard' %}" class="text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a>
     </div>
 </div>
 {% endblock %}
-

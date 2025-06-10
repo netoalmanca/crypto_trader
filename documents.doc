@@ -1,0 +1,111 @@
+Visão Geral
+O "Crypto Trader Pro" é uma aplicação web construída com Django, projetada para ser um painel de gerenciamento e negociação de portfólio de criptomoedas. Ela se integra com a API da Binance para buscar dados de mercado e executar ordens de compra e venda.
+
+Arquitetura e Componentes Principais
+Backend: Django
+
+Frontend: Templates Django com Tailwind CSS para estilização.
+
+Banco de Dados: SQLite (para desenvolvimento).
+
+Tarefas em Segundo Plano: Celery com Redis como broker para atualização automática de dados.
+
+API Externa: API da Binance (atualmente configurada para a Testnet).
+
+Funcionalidades Implementadas
+Autenticação e Perfil de Usuário:
+
+Sistema completo de registro, login e logout de usuários.
+
+Criação automática de um UserProfile para cada usuário.
+
+Página dedicada para os usuários configurarem suas próprias chaves API da Binance e definirem sua moeda fiduciária preferida (BRL, USD, EUR, etc.).
+
+Gerenciamento de Portfólio (Dashboard):
+
+O dashboard exibe um resumo do valor total do portfólio, convertido para a moeda preferida do usuário.
+
+A tabela "Minhas Posses" detalha cada criptomoeda no portfólio do usuário, mostrando:
+
+Quantidade.
+
+Preço Médio de Compra, Preço Atual, Valor Atual e Lucro/Prejuízo (L/P), todos convertidos e exibidos na moeda preferida do usuário.
+
+Percentual de Lucro/Prejuízo.
+
+A conversão de moeda é realizada usando taxas de câmbio (ex: USDT para BRL) que são buscadas e armazenadas no banco de dados.
+
+Dados de Mercado:
+
+Atualização Automática (Celery):
+
+Uma tarefa Celery (update_all_cryptocurrency_prices) é executada a cada 1 minuto para buscar os preços atuais das criptomoedas cadastradas (ex: BTCUSDT, ETHUSDT) e salvar no banco de dados.
+
+Uma segunda tarefa Celery (update_exchange_rates) é executada a cada 1 minuto para buscar taxas de câmbio (ex: USDTBRL) e salvá-las no banco de dados.
+
+Lista de Criptomoedas: A página /cryptocurrencies/ exibe uma lista de todas as criptomoedas cadastradas, enriquecida com dados de 24h (variação de preço, volume, máxima e mínima) obtidos em tempo real da API da Binance.
+
+Página de Detalhes: Cada criptomoeda tem uma página de detalhes (/cryptocurrency/<symbol>/) que exibe um gráfico interativo do histórico de preços dos últimos 90 dias, utilizando Chart.js.
+
+Negociação via API (Testnet da Binance):
+
+Compra a Mercado: Uma página dedicada permite aos usuários comprar criptomoedas. Eles podem optar por:
+
+Especificar a quantidade da criptomoeda a ser comprada (ex: 0.01 BTC).
+
+Especificar o valor da moeda de cotação a ser gasto (ex: comprar 100 USDT de BTC).
+
+Venda a Mercado: Uma página dedicada permite aos usuários vender suas criptomoedas. Eles podem optar por:
+
+Vender uma quantidade específica da criptomoeda.
+
+Vender para receber um valor aproximado na moeda de cotação.
+
+Ambas as funcionalidades usam as chaves API do perfil do usuário, validam as regras da Binance (LOT_SIZE, MIN_NOTIONAL) e registram a transação localmente após a execução bem-sucedida.
+
+Histórico de Transações:
+
+Todas as transações (manuais ou via API) são registradas e podem ser visualizadas em uma página de histórico, mostrando tipo, data, cripto, quantidade, preço e valor.
+
+Próximos Passos Sugeridos
+O projeto atingiu um estado funcional muito bom. Os próximos passos lógicos se concentram em mover da Testnet para a produção, melhorar a segurança e a robustez, e adicionar funcionalidades de análise mais avançadas.
+
+Segurança das Chaves API (Prioridade Máxima):
+
+O que: Implementar criptografia para os campos binance_api_key e binance_api_secret no modelo UserProfile. Atualmente, eles estão armazenados em texto plano, o que é um risco de segurança inaceitável para chaves da API principal.
+
+Como: Reavaliar o uso de bibliotecas como django-cryptography ou django-fernet-fields, ou implementar uma solução de criptografia customizada.
+
+Habilitar Trading na Mainnet (API Principal):
+
+O que: Permitir que o usuário escolha entre negociar na Testnet ou na Mainnet.
+
+Como: Adicionar um campo ao UserProfile (ex: use_testnet_api) e um controle na interface do usuário (ex: na página de configuração de API). As views de trade (trade_market_buy_view, trade_market_sell_view) devem então usar essa configuração do perfil para inicializar o cliente Binance (Client(..., testnet=user_profile.use_testnet_api)). Adicionar avisos claros na UI quando o modo Mainnet estiver ativo.
+
+Melhorar a Resiliência das Tarefas Celery:
+
+O que: Adicionar mais tratamento de erros e retentativas às tarefas Celery.
+
+Como: Usar os mecanismos de retentativa automática do Celery (autoretry_for, retry_kwargs) na definição das tarefas em core/tasks.py para lidar com falhas temporárias de rede ou da API da Binance.
+
+Implementar Ordens Limite (Limit Orders):
+
+O que: Permitir que os usuários coloquem ordens de compra e venda a um preço específico, em vez de apenas ordens a mercado.
+
+Como: Criar novos formulários e views (trade_limit_buy_view, trade_limit_sell_view) que incluam um campo para o preço. Isso também exigirá uma nova seção no dashboard para visualizar e gerenciar ordens abertas.
+
+Refinar o Dashboard e a Análise de Portfólio:
+
+O que: Adicionar gráficos ao dashboard e métricas de desempenho mais avançadas.
+
+Como:
+
+Usar Chart.js para criar um gráfico de pizza mostrando a distribuição do portfólio por ativo.
+
+Criar um gráfico de linha mostrando a evolução do valor total do portfólio ao longo do tempo. Isso exigiria salvar "snapshots" diários do valor do portfólio em um novo modelo.
+
+Calcular e exibir o L/P (Lucro/Prejuízo) Total do portfólio.
+
+Com base nesta análise, sugiro que o próximo passo seja o Item 1: Segurança das Chaves API, pois é um pré-requisito fundamental para qualquer funcionalidade que use chaves reais.
+
+Você gostaria de prosseguir com a implementação da criptografia das chaves API?

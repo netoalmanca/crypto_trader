@@ -1,0 +1,80 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-lg p-6 sm:p-8">
+        <h1 class="text-3xl font-bold text-white mb-6">{% trans "Comprar (Ordem Limite)" %}</h1>
+        
+        <form method="post" class="space-y-6" id="limit-buy-form">
+            {% csrf_token %}
+            {{ form.currency_display }}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">{% trans "Criptomoeda" %}</label>
+                {{ form.cryptocurrency }}
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-2">{% trans "Tipo de Ordem" %}</label>
+                <div class="flex items-center space-x-4">
+                    {% for radio in form.order_type %}
+                    <div class="flex items-center">
+                        {{ radio.tag }}
+                        <label for="{{ radio.id_for_label }}" class="ml-2 block text-sm text-gray-300">{{ radio.choice_label }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="quantity-input-group" style="display: none;">
+                <label for="{{ form.quantity.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">{% trans "Quantidade a Comprar" %}</label>
+                {{ form.quantity }}
+                {% if form.quantity.errors %}<p class="text-red-400 text-sm mt-1">{{ form.quantity.errors.as_text }}</p>{% endif %}
+            </div>
+
+            <div id="total-value-input-group" style="display: none;">
+                <label for="{{ form.total_value.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
+                    {% trans "Valor Total a Gastar" %} ({{ form.currency_display.value }})
+                </label>
+                {{ form.total_value }}
+                {% if form.total_value.help_text %}<p class="text-gray-500 text-xs mt-1">{{ form.total_value.help_text }}</p>{% endif %}
+                {% if form.total_value.errors %}<p class="text-red-400 text-sm mt-1">{{ form.total_value.errors.as_text }}</p>{% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.price.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
+                    {% trans "Preço Limite por Unidade" %} ({{ form.currency_display.value }})
+                </label>
+                {{ form.price }}
+                {% if form.price.help_text %}<p class="text-gray-500 text-xs mt-1">{{ form.price.help_text }}</p>{% endif %}
+                {% if form.price.errors %}<p class="text-red-400 text-sm mt-1">{{ form.price.errors.as_text }}</p>{% endif %}
+            </div>
+            
+            <div class="pt-4 flex justify-end"><button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-6 rounded-lg">{% trans "Criar Ordem" %}</button></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Script para alternar os campos de quantidade/valor total
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('limit-buy-form');
+        const orderTypeRadios = form.elements.order_type;
+        const quantityGroup = document.getElementById('quantity-input-group');
+        const totalValueGroup = document.getElementById('total-value-input-group');
+
+        function toggleInputs() {
+            if (orderTypeRadios.value === 'QUANTITY') {
+                quantityGroup.style.display = 'block';
+                totalValueGroup.style.display = 'none';
+            } else {
+                quantityGroup.style.display = 'none';
+                totalValueGroup.style.display = 'block';
+            }
+        }
+        for (const radio of orderTypeRadios) { radio.addEventListener('change', toggleInputs); }
+        toggleInputs(); // Initial check
+    });
+</script>
+{% endblock %}

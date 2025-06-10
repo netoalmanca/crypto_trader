@@ -1,204 +1,115 @@
 {% extends "core/base.html" %}
-{% load l10n %}
-
-{% block title %}{{ page_title }}{% endblock %}
-
-{% block extra_head %}
-<!-- Adiciona Chart.js via CDN -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/luxon@^2.0.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@^1.0.0"></script>
-
-{% endblock %}
+{% load i18n %}
+{% load humanize %}
 
 {% block content %}
-<div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl">
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
-        <div class="flex items-center mb-4 sm:mb-0">
-            {% if crypto.logo_url %}
-                <img src="{{ crypto.logo_url }}" alt="Logo {{ crypto.name }}" class="w-10 h-10 rounded-full object-contain mr-4" 
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div style="display:none;" class="w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-lg mr-4">{{ crypto.symbol|slice:":2" }}</div>
-            {% else %}
-                <div class="w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-lg mr-4">{{ crypto.symbol|slice:":2" }}</div>
-            {% endif %}
-            <div>
-                <h1 class="text-3xl sm:text-4xl font-bold text-blue-400">{{ crypto.name }} ({{ crypto.symbol }})</h1>
-                <p class="text-gray-400 text-sm">Moeda de Cotação para Preço: {{ crypto.price_currency }}</p>
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Cabeçalho com o Nome e Preço -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <div class="flex items-center mb-4 sm:mb-0">
+                {% if crypto.logo_url %}
+                    <img src="{{ crypto.logo_url }}" class="h-12 w-12 mr-4 rounded-full" alt="Logo de {{ crypto.name }}">
+                {% endif %}
+                <div>
+                    <h1 class="text-3xl font-bold text-white">{{ crypto.name }} ({{ crypto.symbol }})</h1>
+                    <p class="text-gray-400">Moeda de Cotação para Preço: {{ crypto.price_currency }}</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-4xl font-extrabold text-cyan-400">
+                    {{ crypto.current_price|floatformat:crypto.get_price_decimals|intcomma }}
+                    <span class="text-2xl text-gray-500">{{ crypto.price_currency }}</span>
+                </p>
+                <p class="text-sm text-gray-500">Última atualização: {{ crypto.last_updated|date:"d/m/Y H:i" }}</p>
             </div>
         </div>
-        <div class="text-right">
-            {% if crypto.current_price %}
-                <p class="text-2xl font-bold text-green-400">{{ crypto.current_price|floatformat:2 }} {{ crypto.price_currency }}</p>
-                <p class="text-xs text-gray-500">Última atualização: {{ crypto.last_updated|date:"d/m/Y H:i:s" }}</p>
+
+        <!-- Card do Gráfico -->
+        <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Histórico de Preços (Últimos 90 dias - Fechamento Diário)</h2>
+            {% if not chart_error_message %}
+                <canvas id="priceChart"></canvas>
             {% else %}
-                <p class="text-2xl font-bold text-gray-500">Preço Indisponível</p>
+                <div class="bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
+                    <p>{{ chart_error_message }}</p>
+                </div>
             {% endif %}
         </div>
-    </div>
-
-    <!-- Seção do Gráfico -->
-    <div class="mt-8 bg-gray-700 p-4 sm:p-6 rounded-lg shadow-inner">
-        <h2 class="text-xl font-semibold text-white mb-4">Histórico de Preços (Últimos 30 dias - Fechamento Diário)</h2>
-        {% if chart_error_message %}
-            <div class="alert alert-warning" role="alert">
-                {{ chart_error_message }}
-            </div>
-        {% else %}
-            <div class="chart-container" style="position: relative; height:60vh; width:100%">
-                <canvas id="priceHistoryChart"></canvas>
-            </div>
-            <!-- Dados do gráfico passados como uma string JSON e atribuídos a uma variável JS -->
-            <script id="chartData" type="application/json">
-                {{ klines_data_json|safe }}
-            </script>
-        {% endif %}
-    </div>
-
-    <div class="mt-8">
-        <a href="{% url 'core:cryptocurrency_list' %}" class="text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para a Lista de Criptomoedas</a>
     </div>
 </div>
 
-{% if not chart_error_message %}
+<!-- Incluir Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Pega os dados do script tag
-    const chartDataElement = document.getElementById('chartData');
-    if (!chartDataElement) {
-        console.error('Elemento de dados do gráfico não encontrado!');
-        return;
-    }
-    
-    let klinesData;
-    try {
-        klinesData = JSON.parse(chartDataElement.textContent);
-    } catch (e) {
-        console.error('Erro ao parsear dados JSON do gráfico:', e);
-        // Adicionar uma mensagem para o usuário na interface, se apropriado
-        const chartContainer = document.querySelector('.chart-container');
-        if (chartContainer) {
-            chartContainer.innerHTML = '<p class="text-red-400 text-center">Erro ao carregar dados do gráfico. Verifique o console.</p>';
-        }
-        return;
-    }
+    document.addEventListener('DOMContentLoaded', function () {
+        const chartDataElement = document.getElementById('priceChart');
+        if (chartDataElement) {
+            const ctx = chartDataElement.getContext('2d');
+            let chartData;
 
-    if (!klinesData || !klinesData.labels || !klinesData.data) {
-        console.error('Dados do gráfico estão incompletos ou ausentes:', klinesData);
-         const chartContainer = document.querySelector('.chart-container');
-        if (chartContainer) {
-            chartContainer.innerHTML = '<p class="text-yellow-400 text-center">Dados insuficientes para renderizar o gráfico.</p>';
-        }
-        return;
-    }
+            try {
+                // Tenta analisar os dados JSON passados pela view
+                chartData = JSON.parse('{{ klines_data_json|escapejs }}');
+            } catch (e) {
+                console.error("Erro ao analisar os dados do gráfico:", e);
+                // Exibe uma mensagem de erro no lugar do gráfico se os dados forem inválidos
+                const errorContainer = chartDataElement.parentElement;
+                errorContainer.innerHTML = `<div class="bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg"><p>Não foi possível carregar os dados para o gráfico.</p></div>`;
+                return;
+            }
 
-    const ctx = document.getElementById('priceHistoryChart').getContext('2d');
-    
-    // Mapeia os rótulos de data para objetos Date para o adaptador Luxon, se necessário
-    // Chart.js com adaptador Luxon pode lidar com strings ISO, mas converter pode ser mais robusto.
-    // Para este exemplo, vamos assumir que as strings 'YYYY-MM-DD' são suficientes para o adaptador.
+            if (chartData && chartData.labels && chartData.data) {
+                // Gradiente para a linha do gráfico
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(6, 182, 212, 0.8)');
+                gradient.addColorStop(1, 'rgba(6, 182, 212, 0.1)');
 
-    const priceHistoryChart = new Chart(ctx, {
-        type: 'line', // Tipo de gráfico
-        data: {
-            labels: klinesData.labels, // Datas (eixo X)
-            datasets: [{
-                label: `Preço de Fechamento (${klinesData.symbol}/${klinesData.price_currency})`,
-                data: klinesData.data, // Preços de fechamento (eixo Y)
-                borderColor: 'rgb(59, 130, 246)', // Azul Tailwind (blue-500)
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.1, // Suaviza a linha
-                fill: true,
-                borderWidth: 2,
-                pointBackgroundColor: 'rgb(59, 130, 246)',
-                pointRadius: 3,
-                pointHoverRadius: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    type: 'time', // Informa ao Chart.js que o eixo X é temporal
-                    time: {
-                        unit: 'day', // Unidade de tempo para exibição dos ticks
-                        tooltipFormat: 'DD MMM YYYY', // Formato do tooltip
-                        displayFormats: {
-                            day: 'DD MMM' // Formato de exibição dos ticks no eixo X
-                        }
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: `Preço de Fechamento (${chartData.currency})`,
+                            data: chartData.data,
+                            borderColor: '#06b6d4',
+                            backgroundColor: gradient,
+                            borderWidth: 2,
+                            pointBackgroundColor: '#06b6d4',
+                            pointRadius: 0, // Pontos aparecem no hover
+                            pointHoverRadius: 6,
+                            tension: 0.1,
+                            fill: true,
+                        }]
                     },
-                    title: {
-                        display: true,
-                        text: 'Data',
-                        color: '#9ca3af' // text-gray-400
-                    },
-                    ticks: {
-                        color: '#d1d5db', // text-gray-300
-                        maxRotation: 45,
-                        minRotation: 45
-                    },
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)' // Cor das linhas de grade do eixo X
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: `Preço (${klinesData.price_currency})`,
-                        color: '#9ca3af'
-                    },
-                    ticks: {
-                        color: '#d1d5db',
-                        // Adicionar formatação de moeda se necessário
-                        callback: function(value, index, values) {
-                            return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        }
-                    },
-                     grid: {
-                        color: 'rgba(255, 255, 255, 0.1)' // Cor das linhas de grade do eixo Y
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        color: '#f3f4f6' // text-gray-100
-                    }
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    backgroundColor: 'rgba(31, 41, 55, 0.9)', // bg-gray-800 com opacidade
-                    titleColor: '#e5e7eb', // text-gray-200
-                    bodyColor: '#d1d5db', // text-gray-300
-                    borderColor: '#4b5563', // border-gray-600
-                    borderWidth: 1,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                ticks: { color: '#9ca3af' },
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#9ca3af' },
+                                grid: { display: false }
                             }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y.toLocaleString(undefined, { style: 'currency', currency: klinesData.price_currency, minimumFractionDigits: 2, maximumFractionDigits: (klinesData.price_currency === 'BTC' || klinesData.price_currency === 'ETH' ? 8 : 2) });
+                        },
+                        plugins: {
+                            legend: {
+                                labels: { color: '#d1d5db' }
+                            },
+                            tooltip: {
+                                backgroundColor: '#1f2937',
+                                titleColor: '#ffffff',
+                                bodyColor: '#d1d5db',
+                                displayColors: false
                             }
-                            return label;
                         }
                     }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+                });
             }
         }
     });
-});
 </script>
-{% endif %}
-
 {% endblock %}

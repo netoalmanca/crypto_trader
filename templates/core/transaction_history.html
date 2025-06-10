@@ -1,89 +1,53 @@
 {% extends "core/base.html" %}
-{% load l10n %}
-
-{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+{% load i18n %}
+{% load humanize %}
 
 {% block content %}
-<div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl">
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-8">
-        <h1 class="text-3xl sm:text-4xl font-bold text-blue-400">{{ page_title }}</h1>
-        <a href="{% url 'core:add_transaction' %}" class="mt-4 sm:mt-0 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
-            Adicionar Nova Transação
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-white">{% trans "Histórico de Transações" %}</h1>
+        <a href="{% url 'core:sync_trades' %}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+            <i class="fas fa-sync-alt mr-2"></i> {% trans "Sincronizar com Binance" %}
         </a>
     </div>
-
-    {% if transactions %}
-        <div class="overflow-x-auto rounded-lg shadow">
-            <table class="min-w-full leading-normal">
-                <thead class="bg-gray-700">
+    
+    <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-left text-gray-300">
+                <thead class="text-xs text-gray-400 uppercase bg-gray-700/50">
                     <tr>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Data</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Tipo</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Cripto</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Quantidade</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Preço Unit. ({{ transactions.0.cryptocurrency.price_currency }})</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Valor Total ({{ transactions.0.cryptocurrency.price_currency }})</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Taxas ({{ transactions.0.cryptocurrency.price_currency }})</th>
-                        <th scope="col" class="px-5 py-3 border-b-2 border-gray-600 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Notas</th>
+                        <th scope="col" class="px-6 py-3">Data</th>
+                        <th scope="col" class="px-6 py-3">Ativo</th>
+                        <th scope="col" class="px-6 py-3">Tipo</th>
+                        <th scope="col" class="px-6 py-3 text-right">Quantidade</th>
+                        <th scope="col" class="px-6 py-3 text-right">Preço Unit.</th>
+                        <th scope="col" class="px-6 py-3 text-right">Valor Total</th>
                     </tr>
                 </thead>
-                <tbody class="bg-gray-750">
+                <tbody>
                     {% for tx in transactions %}
-                    <tr class="hover:bg-gray-600 transition-colors duration-150">
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-300 whitespace-no-wrap">{{ tx.transaction_date|date:"d/m/Y H:i" }}</p>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                {% if tx.transaction_type == 'BUY' %} bg-green-700 text-green-100 {% else %} bg-red-700 text-red-100 {% endif %}">
+                    <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                        <td class="px-6 py-4">{{ tx.transaction_date|date:"d/m/Y H:i" }}</td>
+                        <td class="px-6 py-4 font-semibold text-white">{{ tx.cryptocurrency.symbol }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 font-semibold leading-tight rounded-full {% if tx.transaction_type == 'BUY' %}bg-green-900 text-green-300{% else %}bg-red-900 text-red-300{% endif %}">
                                 {{ tx.get_transaction_type_display }}
                             </span>
                         </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <div class="flex items-center">
-                                {% if tx.cryptocurrency.logo_url %}
-                                    <img src="{{ tx.cryptocurrency.logo_url }}" alt="Logo {{ tx.cryptocurrency.name }}" class="w-6 h-6 rounded-full object-contain mr-2" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                    <div style="display:none;" class="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-xs mr-2">{{ tx.cryptocurrency.symbol|slice:":2" }}</div>
-                                {% else %}
-                                    <div class="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold text-xs mr-2">{{ tx.cryptocurrency.symbol|slice:":2" }}</div>
-                                {% endif %}
-                                <p class="text-blue-400 font-semibold whitespace-no-wrap">{{ tx.cryptocurrency.symbol }}</p>
-                            </div>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-100 whitespace-no-wrap">{{ tx.quantity_crypto|floatformat:"-8" }}</p>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-300 whitespace-no-wrap">{{ tx.price_per_unit|floatformat:2 }}</p>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-100 font-semibold whitespace-no-wrap">{{ tx.total_value|floatformat:2 }}</p>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-300 whitespace-no-wrap">{{ tx.fees|floatformat:2 }}</p>
-                        </td>
-                        <td class="px-5 py-4 border-b border-gray-600 text-sm">
-                            <p class="text-gray-400 whitespace-no-wrap">{{ tx.notes|default:"-" }}</p>
+                        <td class="px-6 py-4 text-right">{{ tx.quantity_crypto|floatformat:"-8" }}</td>
+                        <td class="px-6 py-4 text-right">{{ tx.price_per_unit|floatformat:"-2" }}</td>
+                        <td class="px-6 py-4 text-right">{{ tx.total_value|floatformat:"-2"|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                            Nenhuma transação registrada.
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    {% else %}
-        <div class="text-center py-10 bg-gray-750 rounded-lg">
-            <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3 class="mt-2 text-lg font-medium text-white">Nenhuma Transação Registrada</h3>
-            <p class="mt-1 text-sm text-gray-400">
-                Você ainda não registrou nenhuma transação.
-            </p>
-        </div>
-    {% endif %}
-
-    <div class="mt-8">
-        <a href="{% url 'core:dashboard' %}" class="text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a>
     </div>
 </div>
 {% endblock %}

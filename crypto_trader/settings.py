@@ -2,7 +2,7 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-from celery.schedules import crontab # Para agendamentos mais complexos
+from celery.schedules import crontab
 
 load_dotenv(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
 
@@ -12,11 +12,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS_STRING = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',') if host.strip()]
 
-# Chave para criptografia de campos sensíveis no banco de dados
 FIELD_ENCRYPTION_KEY = os.environ.get('DJANGO_FIELD_ENCRYPTION_KEY')
 if not FIELD_ENCRYPTION_KEY and not DEBUG:
     raise ValueError("A variável de ambiente DJANGO_FIELD_ENCRYPTION_KEY deve ser definida em produção.")
 
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',  # <-- Adicionado para usar filtros como 'intcomma'
     'core.apps.CoreConfig',
 ]
 
