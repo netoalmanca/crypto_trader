@@ -4,13 +4,20 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <div class="flex justify-between items-center mb-6">
+    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
         <h1 class="text-3xl font-bold text-white">{% trans "Histórico de Transações" %}</h1>
-        <a href="{% url 'core:sync_trades' %}" id="sync-button" class="btn-primary !w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
-            <div class="spinner !border-t-white !border-r-transparent !border-b-transparent !border-l-transparent"></div>
-            <i class="fas fa-sync-alt mr-2 icon"></i>
-            <span class="btn-text">{% trans "Sincronizar com Binance" %}</span>
-        </a>
+        <div class="flex flex-wrap gap-4">
+            <a href="{% url 'core:sync_trades' %}" id="sync-button" class="btn-primary !w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                <div class="spinner !border-t-white !border-r-transparent !border-b-transparent !border-l-transparent"></div>
+                <i class="fas fa-sync-alt mr-2 icon"></i>
+                <span class="btn-text">{% trans "Sincronizar com Binance" %}</span>
+            </a>
+            <a href="{% url 'core:export_transactions_csv' %}" id="export-button" class="btn-primary !w-auto bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                <div class="spinner !border-t-white !border-r-transparent !border-b-transparent !border-l-transparent"></div>
+                <i class="fas fa-file-csv mr-2 icon"></i>
+                <span class="btn-text">{% trans "Exportar para CSV" %}</span>
+            </a>
+        </div>
     </div>
     
     <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
@@ -90,10 +97,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const icon = this.querySelector('.icon');
 
             this.classList.add('loading');
-            this.style.pointerEvents = 'none'; // Desabilita o link via estilo
+            this.style.pointerEvents = 'none';
             if (icon) icon.style.display = 'none';
             if (buttonText) buttonText.textContent = 'Sincronizando...';
-            // Não precisamos de preventDefault() porque queremos que o link seja seguido
+        });
+    }
+
+    const exportButton = document.getElementById('export-button');
+    if (exportButton) {
+        exportButton.addEventListener('click', function(event) {
+            const buttonText = this.querySelector('.btn-text');
+            const icon = this.querySelector('.icon');
+
+            this.classList.add('loading');
+            this.style.pointerEvents = 'none';
+            if (icon) icon.style.display = 'none';
+            if (buttonText) buttonText.textContent = 'Gerando...';
+
+            setTimeout(() => {
+                 this.classList.remove('loading');
+                 this.style.pointerEvents = 'auto';
+                 if (icon) icon.style.display = 'inline-block';
+                 if (buttonText) buttonText.textContent = '{% trans "Exportar para CSV" %}';
+            }, 5000);
         });
     }
 });

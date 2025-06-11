@@ -5,8 +5,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.conf import settings
 from django.utils import timezone
-# Importa o Paginator e as exceções relacionadas
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+# Novos imports para a exportação CSV
+import csv
+from django.http import HttpResponse
 from .forms import (
     CustomUserCreationForm, CustomAuthenticationForm, UserProfileAPIForm,
     TransactionForm, LimitBuyForm, LimitSellForm, MarketBuyForm, MarketSellForm
@@ -223,26 +225,22 @@ def cryptocurrency_list_view(request):
             ticker_24h = client.get_ticker(symbol=f"{crypto.symbol.upper()}{crypto.price_currency.upper()}")
             data.update({'price_change_percent_24h': Decimal(ticker_24h.get('priceChangePercent', '0'))})
         except BinanceAPIException:
-            # Define explicitamente como None em caso de falha para evitar erros no template
             data.update({'price_change_percent_24h': None})
         enriched_cryptos_data.append(data)
 
-    # Cria o objeto Paginator com a lista enriquecida
-    paginator = Paginator(enriched_cryptos_data, 20)  # Mostra 20 criptos por página
+    paginator = Paginator(enriched_cryptos_data, 20)
     page_number = request.GET.get('page')
 
     try:
         cryptocurrencies_page = paginator.page(page_number)
     except PageNotAnInteger:
-        # Se 'page' não for um inteiro, mostra a primeira página
         cryptocurrencies_page = paginator.page(1)
     except EmptyPage:
-        # Se 'page' estiver fora do intervalo, mostra a última página
         cryptocurrencies_page = paginator.page(paginator.num_pages)
 
     return render(request, 'core/cryptocurrency_list.html', {
         'page_title': 'Lista de Criptomoedas',
-        'cryptocurrencies_page': cryptocurrencies_page  # Passa o objeto da página para o template
+        'cryptocurrencies_page': cryptocurrencies_page
     })
 
 
@@ -291,31 +289,58 @@ def open_orders_view(request):
 
 @login_required
 def transaction_history_view(request):
-    # Obtém a lista de transações completa e ordenada
     transaction_list = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
-    
-    # Cria um objeto Paginator, com 15 transações por página
     paginator = Paginator(transaction_list, 15) 
-    
-    # Obtém o número da página da query string da URL (ex: ?page=2)
     page_number = request.GET.get('page')
-    
     try:
-        # Tenta obter a página solicitada
         transactions_page = paginator.page(page_number)
     except PageNotAnInteger:
-        # Se 'page' não for um inteiro, entrega a primeira página.
         transactions_page = paginator.page(1)
     except EmptyPage:
-        # Se 'page' estiver fora do intervalo (ex: 9999), entrega a última página de resultados.
         transactions_page = paginator.page(paginator.num_pages)
         
-    # Passa o objeto 'page' para o template em vez da lista completa
     return render(request, 'core/transaction_history.html', {
         'transactions_page': transactions_page, 
         'page_title': 'Histórico de Transações'
     })
 
+@login_required
+def export_transactions_csv_view(request):
+    """
+    Gera e serve um arquivo CSV com o histórico de transações do usuário.
+    """
+    filename = f"historico_transacoes_{request.user.username}_{timezone.now().strftime('%Y%m%d')}.csv"
+    
+    response = HttpResponse(
+        content_type='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+    response.write(u'\ufeff'.encode('utf8'))
+
+    writer = csv.writer(response, delimiter=';')
+
+    writer.writerow([
+        'Data Transacao', 'Tipo', 'Simbolo', 'Nome Cripto', 
+        'Quantidade', 'Preco Unitario', 'Moeda Preco', 'Valor Total', 'Taxas', 'Notas'
+    ])
+
+    transactions = Transaction.objects.filter(user_profile__user=request.user).select_related('cryptocurrency').order_by('transaction_date')
+
+    for tx in transactions:
+        writer.writerow([
+            tx.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+            tx.get_transaction_type_display(),
+            tx.cryptocurrency.symbol,
+            tx.cryptocurrency.name,
+            f'{tx.quantity_crypto:.8f}'.replace('.', ','),
+            f'{tx.price_per_unit:.8f}'.replace('.', ','),
+            tx.cryptocurrency.price_currency,
+            f'{tx.total_value:.8f}'.replace('.', ','),
+            f'{tx.fees:.8f}'.replace('.', ','),
+            tx.notes
+        ])
+
+    return response
 
 @login_required
 @db_transaction.atomic

@@ -15,12 +15,14 @@ urlpatterns = [
     # Profile, Info & Transactions
     path('profile/api-keys/', views.update_api_keys_view, name='update_api_keys'),
     path('profile/reset/', views.reset_portfolio_view, name='reset_portfolio'), 
-    path('profile/recalculate/', views.recalculate_holdings_view, name='recalculate_holdings'), # NOVA ROTA
+    path('profile/recalculate/', views.recalculate_holdings_view, name='recalculate_holdings'),
     path('cryptocurrencies/', views.cryptocurrency_list_view, name='cryptocurrency_list'),
     path('cryptocurrency/<str:symbol>/', views.cryptocurrency_detail_view, name='cryptocurrency_detail'),
     path('transactions/history/', views.transaction_history_view, name='transaction_history'),
     path('transactions/add/', views.add_transaction_view, name='add_transaction'),
     path('transactions/sync/', views.sync_binance_trades_view, name='sync_trades'),
+    # NOVA ROTA PARA EXPORTAÇÃO
+    path('transactions/export/', views.export_transactions_csv_view, name='export_transactions_csv'),
     path('open-orders/', views.open_orders_view, name='open_orders'),
     
     # Trading
