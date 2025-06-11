@@ -1,0 +1,78 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white">{{ page_title }}</h1>
+            <p class="text-lg text-gray-400 mt-1">Uma visão consolidada da performance do seu portfólio.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Card Custo Total de Aquisição -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Custo de Aquisição</h2>
+                        <span class="bg-blue-900/50 text-blue-300 p-2 rounded-lg">
+                            <i class="fas fa-shopping-cart"></i>
+                        </span>
+                    </div>
+                    <p class="text-3xl font-extrabold text-white mt-2">
+                        {{ total_cost_basis|floatformat:2|intcomma }}
+                        <span class="text-xl text-gray-500">{{ portfolio_currency }}</span>
+                    </p>
+                </div>
+                <p class="text-xs text-gray-500 mt-4">O valor total que você investiu para montar seu portfólio atual.</p>
+            </div>
+
+            <!-- Card Lucro / Prejuízo Total -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Lucro / Prejuízo Total (P/L)</h2>
+                        <span class="p-2 rounded-lg {% if total_profit_loss > 0 %}bg-green-900/50 text-green-300{% elif total_profit_loss < 0 %}bg-red-900/50 text-red-300{% else %}bg-gray-700 text-gray-300{% endif %}">
+                            <i class="fas fa-balance-scale"></i>
+                        </span>
+                    </div>
+                    <p class="text-3xl font-extrabold mt-2 {% if total_profit_loss > 0 %}text-green-400{% elif total_profit_loss < 0 %}text-red-400{% else %}text-white{% endif %}">
+                        {{ total_profit_loss|floatformat:2|intcomma }}
+                        <span class="text-xl text-gray-500">{{ portfolio_currency }}</span>
+                    </p>
+                </div>
+                <p class="text-xs text-gray-500 mt-4">A diferença entre o valor de mercado atual e o custo de aquisição.</p>
+            </div>
+
+            <!-- Card Retorno Sobre Investimento (ROI) -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Retorno / ROI</h2>
+                        <span class="p-2 rounded-lg {% if roi > 0 %}bg-green-900/50 text-green-300{% elif roi < 0 %}bg-red-900/50 text-red-300{% else %}bg-gray-700 text-gray-300{% endif %}">
+                             <i class="fas fa-percentage"></i>
+                        </span>
+                    </div>
+                    {% if roi is not None %}
+                    <p class="text-3xl font-extrabold mt-2 {% if roi > 0 %}text-green-400{% elif roi < 0 %}text-red-400{% else %}text-white{% endif %}">
+                        {{ roi|floatformat:2|intcomma }}%
+                    </p>
+                    {% else %}
+                    <p class="text-2xl font-bold text-gray-500 mt-2">N/A</p>
+                    {% endif %}
+                </div>
+                <p class="text-xs text-gray-500 mt-4">O seu lucro ou prejuízo como uma porcentagem do custo de aquisição.</p>
+            </div>
+
+        </div>
+
+        <div class="mt-10 text-center">
+             <a href="{% url 'core:dashboard' %}" class="text-blue-400 hover:text-blue-300 transition-colors">&larr; Voltar para o Dashboard</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

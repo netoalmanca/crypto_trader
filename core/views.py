@@ -6,7 +6,6 @@ from django.contrib import messages
 from django.conf import settings
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-# Novos imports para a exportação CSV
 import csv
 from django.http import HttpResponse
 from .forms import (
@@ -185,6 +184,44 @@ def dashboard_view(request):
     return render(request, 'core/dashboard.html', context)
 
 @login_required
+def reports_view(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+    holdings = Holding.objects.filter(user_profile=user_profile).select_related('cryptocurrency')
+
+    pref_currency = user_profile.preferred_fiat_currency
+    exchange_rates = {rate.to_currency: rate.rate for rate in ExchangeRate.objects.filter(from_currency=BASE_RATE_CURRENCY)}
+    exchange_rates[BASE_RATE_CURRENCY] = Decimal('1.0')
+    rate_to_pref_currency = exchange_rates.get(pref_currency)
+    
+    total_current_value = Decimal('0.0')
+    total_cost_basis = Decimal('0.0')
+
+    if rate_to_pref_currency:
+        for holding in holdings:
+            if holding.current_market_value is not None:
+                total_current_value += holding.current_market_value * rate_to_pref_currency
+            if holding.cost_basis is not None:
+                total_cost_basis += holding.cost_basis * rate_to_pref_currency
+    else:
+        messages.warning(request, f"Taxa de câmbio para {pref_currency} não encontrada. Os valores podem estar incorretos.")
+
+    total_profit_loss = total_current_value - total_cost_basis
+    
+    roi = None
+    if total_cost_basis > 0:
+        roi = (total_profit_loss / total_cost_basis) * 100
+
+    context = {
+        'page_title': 'Relatório de Performance',
+        'total_current_value': total_current_value,
+        'total_cost_basis': total_cost_basis,
+        'total_profit_loss': total_profit_loss,
+        'roi': roi,
+        'portfolio_currency': pref_currency,
+    }
+    return render(request, 'core/reports.html', context)
+
+@login_required
 def update_api_keys_view(request):
     user_profile, created = UserProfile.objects.get_or_create(user=request.user)
     form = UserProfileAPIForm(request.POST or None, instance=user_profile)
@@ -306,26 +343,18 @@ def transaction_history_view(request):
 
 @login_required
 def export_transactions_csv_view(request):
-    """
-    Gera e serve um arquivo CSV com o histórico de transações do usuário.
-    """
     filename = f"historico_transacoes_{request.user.username}_{timezone.now().strftime('%Y%m%d')}.csv"
-    
     response = HttpResponse(
         content_type='text/csv',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
     response.write(u'\ufeff'.encode('utf8'))
-
     writer = csv.writer(response, delimiter=';')
-
     writer.writerow([
         'Data Transacao', 'Tipo', 'Simbolo', 'Nome Cripto', 
         'Quantidade', 'Preco Unitario', 'Moeda Preco', 'Valor Total', 'Taxas', 'Notas'
     ])
-
     transactions = Transaction.objects.filter(user_profile__user=request.user).select_related('cryptocurrency').order_by('transaction_date')
-
     for tx in transactions:
         writer.writerow([
             tx.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
@@ -339,7 +368,6 @@ def export_transactions_csv_view(request):
             f'{tx.fees:.8f}'.replace('.', ','),
             tx.notes
         ])
-
     return response
 
 @login_required

@@ -21,10 +21,11 @@ urlpatterns = [
     path('transactions/history/', views.transaction_history_view, name='transaction_history'),
     path('transactions/add/', views.add_transaction_view, name='add_transaction'),
     path('transactions/sync/', views.sync_binance_trades_view, name='sync_trades'),
-    # NOVA ROTA PARA EXPORTAÇÃO
     path('transactions/export/', views.export_transactions_csv_view, name='export_transactions_csv'),
     path('open-orders/', views.open_orders_view, name='open_orders'),
-    
+    # NOVA ROTA PARA RELATÓRIOS
+    path('reports/', views.reports_view, name='reports'),
+
     # Trading
     path('trade/market-buy/', views.trade_market_buy_view, name='trade_market_buy'),
     path('trade/market-sell/', views.trade_market_sell_view, name='trade_market_sell'),
