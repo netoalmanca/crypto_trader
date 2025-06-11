@@ -1,0 +1,132 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% load humanize %}
+
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Cabeçalho -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">{{ page_title }}</h1>
+                <p class="mt-1 text-lg text-gray-400">Monitore as decisões e a performance da sua IA de trading.</p>
+            </div>
+            <a href="{% url 'core:update_api_keys' %}" class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-purple-500">
+                <i class="fas fa-cog mr-2"></i>
+                Configurar Agente
+            </a>
+        </div>
+
+        <!-- Cards de Estatísticas -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Card Status do Agente -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Status do Agente</h3>
+                {% if agent_status %}
+                    <p class="mt-2 text-2xl font-bold text-green-400 flex items-center">
+                        <span class="w-3 h-3 mr-2 bg-green-400 rounded-full animate-pulse"></span>
+                        ATIVO
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">O agente está analisando o mercado e pode executar trades.</p>
+                {% else %}
+                    <p class="mt-2 text-2xl font-bold text-red-400 flex items-center">
+                        <span class="w-3 h-3 mr-2 bg-red-400 rounded-full"></span>
+                        INATIVO
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">O agente não executará nenhuma operação.</p>
+                {% endif %}
+            </div>
+
+            <!-- Card Total de Sinais -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Total de Sinais Gerados</h3>
+                <p class="mt-2 text-3xl font-extrabold text-white">{{ stats.total_signals }}</p>
+                <p class="text-xs text-gray-500 mt-1">
+                    <span class="text-green-400">{{ stats.buy_signals }} Compras</span> / 
+                    <span class="text-red-400">{{ stats.sell_signals }} Vendas</span>
+                </p>
+            </div>
+
+            <!-- Card Taxa de Execução -->
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Taxa de Execução</h3>
+                <p class="mt-2 text-3xl font-extrabold text-white">{{ execution_rate|floatformat:1 }}%</p>
+                <p class="text-xs text-gray-500 mt-1">Dos sinais de Compra/Venda, {{ stats.executed_signals }} foram executados.</p>
+            </div>
+        </div>
+
+        <!-- Tabela de Sinais Recentes -->
+        <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <h2 class="text-xl font-semibold text-white p-6">Histórico de Sinais da IA</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm text-left text-gray-300">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-700/50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Data</th>
+                            <th scope="col" class="px-6 py-3">Ativo</th>
+                            <th scope="col" class="px-6 py-3">Decisão</th>
+                            <th scope="col" class="px-6 py-3">Confiança</th>
+                            <th scope="col" class="px-6 py-3">Justificativa da IA</th>
+                            <th scope="col" class="px-6 py-3 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for signal in signals_page %}
+                        <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                            <td class="px-6 py-4 whitespace-nowrap text-gray-400">{{ signal.timestamp|date:"d/m/Y H:i" }}</td>
+                            <td class="px-6 py-4 font-semibold text-white">{{ signal.cryptocurrency.symbol }}</td>
+                            <td class="px-6 py-4 font-bold {% if signal.decision == 'BUY' %}text-green-400{% elif signal.decision == 'SELL' %}text-red-400{% else %}text-gray-400{% endif %}">
+                                {{ signal.get_decision_display }}
+                            </td>
+                            <td class="px-6 py-4">
+                                {% widthratio signal.confidence_score 1 100 as confidence_percent %}
+                                <div class="w-full bg-gray-600 rounded-full h-2.5">
+                                    <div class="h-2.5 rounded-full {% if signal.confidence_score >= 0.75 %}bg-green-500{% elif signal.confidence_score >= 0.5 %}bg-yellow-500{% else %}bg-red-500{% endif %}" style="width: {{ confidence_percent }}%;"></div>
+                                </div>
+                                <span class="text-xs text-gray-400">{{ signal.confidence_score|floatformat:2 }}</span>
+                            </td>
+                            <td class="px-6 py-4 text-gray-400 max-w-sm truncate" title="{{ signal.justification }}">{{ signal.justification|truncatechars:80 }}</td>
+                            <td class="px-6 py-4 text-center">
+                                {% if signal.is_executed %}
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900 text-blue-300">Executado</span>
+                                {% elif signal.decision == 'HOLD' %}
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300">-</span>
+                                {% else %}
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900 text-yellow-300">Pendente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">Nenhum sinal gerado pelo agente ainda.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if signals_page.has_other_pages %}
+            <nav class="bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-700 sm:px-6" aria-label="Pagination">
+                <div class="hidden sm:block">
+                    <p class="text-sm text-gray-400">
+                        Mostrando
+                        <span class="font-medium text-white">{{ signals_page.start_index }}</span> a
+                        <span class="font-medium text-white">{{ signals_page.end_index }}</span> de
+                        <span class="font-medium text-white">{{ signals_page.paginator.count }}</span> resultados
+                    </p>
+                </div>
+                <div class="flex-1 flex justify-between sm:justify-end">
+                    {% if signals_page.has_previous %}
+                        <a href="?page={{ signals_page.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Anterior</a>
+                    {% endif %}
+                    {% if signals_page.has_next %}
+                        <a href="?page={{ signals_page.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Próxima</a>
+                    {% endif %}
+                </div>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

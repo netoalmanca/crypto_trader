@@ -45,30 +45,65 @@ def update_all_cryptocurrency_prices(self):
     retry_backoff=True, retry_kwargs={'max_retries': 3}
 )
 def update_exchange_rates(self):
+    """
+    Busca e salva as taxas de câmbio, tentando pares diretos e inversos.
+    """
     print(f"[{timezone.now()}] Iniciando tarefa: update_exchange_rates (Tentativa: {self.request.retries + 1})")
     client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, tld='com', testnet=settings.BINANCE_TESTNET)
+    
     target_fiat_currencies = [c[0] for c in FIAT_CURRENCY_CHOICES if c[0] != BASE_RATE_CURRENCY]
-    if not target_fiat_currencies: return "Nenhuma moeda fiat alvo."
-    updated_count = 0; failed_symbols = []
+    if not target_fiat_currencies:
+        return "Nenhuma moeda fiat alvo."
+        
+    updated_count = 0
+    failed_symbols = []
+
     for fiat_code in target_fiat_currencies:
-        if (BASE_RATE_CURRENCY, fiat_code) in [('USDT', 'USD'), ('USD', 'USDT')]: rate = Decimal('1.0')
+        rate = None
+        is_inverse = False
+
+        # Trata o caso especial de USD para USDT
+        if (BASE_RATE_CURRENCY, fiat_code) in [('USDT', 'USD'), ('USD', 'USDT')]:
+            rate = Decimal('1.0')
         else:
-            api_symbol_pair = f"{BASE_RATE_CURRENCY}{fiat_code}"
+            # Tentativa 1: Par direto (ex: USDTBRL)
+            direct_pair = f"{BASE_RATE_CURRENCY}{fiat_code}"
+            # Tentativa 2: Par inverso (ex: EURUSDT)
+            inverse_pair = f"{fiat_code}{BASE_RATE_CURRENCY}"
+            
             try:
-                ticker = client.get_symbol_ticker(symbol=api_symbol_pair)
-                if ticker and 'price' in ticker: rate = Decimal(ticker['price'])
-                else: failed_symbols.append(api_symbol_pair); continue
-            except BinanceAPIException as e:
-                print(f"Erro API para par de câmbio {api_symbol_pair}: {e.message}")
-                failed_symbols.append(api_symbol_pair); continue
-        try:
-            ExchangeRate.objects.update_or_create(from_currency=BASE_RATE_CURRENCY, to_currency=fiat_code, defaults={'rate': rate})
-            updated_count += 1
-        except Exception as e:
-            print(f"Erro ao salvar taxa {BASE_RATE_CURRENCY}->{fiat_code}: {e}")
-            failed_symbols.append(f"{BASE_RATE_CURRENCY}->{fiat_code}")
+                # Tenta o par direto primeiro
+                ticker = client.get_symbol_ticker(symbol=direct_pair)
+                rate = Decimal(ticker['price'])
+            except BinanceAPIException:
+                # Se falhar, tenta o par inverso
+                try:
+                    ticker = client.get_symbol_ticker(symbol=inverse_pair)
+                    inverse_price = Decimal(ticker['price'])
+                    if inverse_price > 0:
+                        # A taxa é o inverso do preço do par inverso
+                        rate = Decimal('1.0') / inverse_price
+                    is_inverse = True
+                except BinanceAPIException as e:
+                    print(f"Erro da API Binance para os pares {direct_pair} e {inverse_pair}: {e.message}")
+                    failed_symbols.append(f"{direct_pair}/{inverse_pair}")
+                    continue # Pula para a próxima moeda
+
+        if rate is not None:
+            try:
+                ExchangeRate.objects.update_or_create(
+                    from_currency=BASE_RATE_CURRENCY,
+                    to_currency=fiat_code,
+                    defaults={'rate': rate}
+                )
+                updated_count += 1
+            except Exception as e:
+                print(f"Erro ao salvar a taxa de câmbio para {BASE_RATE_CURRENCY}->{fiat_code}: {e}")
+                failed_symbols.append(f"{BASE_RATE_CURRENCY}->{fiat_code}")
+
     result_message = f"Taxas de câmbio finalizadas. {updated_count} atualizadas. Falhas: {len(failed_symbols)}."
-    if failed_symbols: print(f"Pares com falha: {', '.join(failed_symbols)}")
+    if failed_symbols:
+        print(f"Pares com falha: {', '.join(failed_symbols)}")
     return result_message
 
 # NOVA TAREFA

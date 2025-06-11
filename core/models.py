@@ -64,6 +64,23 @@ class UserProfile(models.Model):
         default=True, verbose_name="Usar Ambiente de Teste (Testnet)",
         help_text="Se marcado, todas as operações de trade usarão a Testnet da Binance (sem fundos reais). Desmarque para usar sua conta real (Mainnet)."
     )
+    # (ADICIONADO NA ETAPA 7)
+    enable_auto_trading = models.BooleanField(
+        default=False,
+        verbose_name="Ativar Agente de Trading Automático",
+        help_text="Se marcado, o agente de IA poderá executar operações automaticamente com base na sua estratégia."
+    )
+    # (ADICIONADO AGORA)
+    agent_buy_risk_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('5.00'),
+        verbose_name="Risco por Compra (%)",
+        help_text="Percentual do seu saldo em USDT que o agente usará para cada ordem de compra."
+    )
+    agent_sell_risk_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('100.00'),
+        verbose_name="Percentual de Venda (%)",
+        help_text="Percentual da sua posse de uma cripto que o agente usará para cada ordem de venda."
+    )
 
     @property
     def binance_api_key(self): return decrypt(self._binance_api_key)
@@ -79,6 +96,8 @@ class UserProfile(models.Model):
         verbose_name_plural = "Perfis de Usuários"
     def __str__(self): return f"Perfil de {self.user.username}"
 
+
+# ... (Resto dos modelos: Holding, Transaction, etc. permanecem inalterados) ...
 class Holding(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='holdings')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='held_by_users')

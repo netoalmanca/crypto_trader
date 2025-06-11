@@ -23,8 +23,10 @@ urlpatterns = [
     path('transactions/sync/', views.sync_binance_trades_view, name='sync_trades'),
     path('transactions/export/', views.export_transactions_csv_view, name='export_transactions_csv'),
     path('open-orders/', views.open_orders_view, name='open_orders'),
-    # NOVA ROTA PARA RELATÓRIOS
     path('reports/', views.reports_view, name='reports'),
+
+    # Rota da API para o Gemini
+    path('api/explain-crypto/', views.explain_crypto_with_ai_view, name='api_explain_crypto'),
 
     # Trading
     path('trade/market-buy/', views.trade_market_buy_view, name='trade_market_buy'),

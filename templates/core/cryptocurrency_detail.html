@@ -25,6 +25,14 @@
             </div>
         </div>
 
+        <!-- Botão para IA -->
+        <div class="mb-6">
+            <button id="explain-button" class="btn-primary !w-auto bg-purple-600 hover:bg-purple-500">
+                <i class="fas fa-brain mr-2"></i>
+                Explique com IA
+            </button>
+        </div>
+
         <!-- Card do Gráfico -->
         <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 class="text-xl font-semibold text-white mb-4">Histórico de Preços (Últimos 90 dias - Fechamento Diário)</h2>
@@ -39,28 +47,42 @@
     </div>
 </div>
 
+<!-- Modal para a explicação da IA -->
+<div id="ai-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-white">Análise da IA sobre {{ crypto.name }}</h3>
+            <button id="close-modal-button" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+        <div id="ai-explanation" class="text-gray-300 leading-relaxed">
+            <!-- Spinner para o modal -->
+            <div class="flex justify-center items-center h-32">
+                 <div class="spinner !border-t-cyan-400" style="display: block; width: 40px; height: 40px; border-width: 4px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Incluir Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // Lógica do Gráfico (sem alterações)
         const chartDataElement = document.getElementById('priceChart');
         if (chartDataElement) {
             const ctx = chartDataElement.getContext('2d');
             let chartData;
 
             try {
-                // Tenta analisar os dados JSON passados pela view
                 chartData = JSON.parse('{{ klines_data_json|escapejs }}');
             } catch (e) {
                 console.error("Erro ao analisar os dados do gráfico:", e);
-                // Exibe uma mensagem de erro no lugar do gráfico se os dados forem inválidos
                 const errorContainer = chartDataElement.parentElement;
                 errorContainer.innerHTML = `<div class="bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg"><p>Não foi possível carregar os dados para o gráfico.</p></div>`;
                 return;
             }
 
             if (chartData && chartData.labels && chartData.data) {
-                // Gradiente para a linha do gráfico
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
                 gradient.addColorStop(0, 'rgba(6, 182, 212, 0.8)');
                 gradient.addColorStop(1, 'rgba(6, 182, 212, 0.1)');
@@ -76,7 +98,7 @@
                             backgroundColor: gradient,
                             borderWidth: 2,
                             pointBackgroundColor: '#06b6d4',
-                            pointRadius: 0, // Pontos aparecem no hover
+                            pointRadius: 0,
                             pointHoverRadius: 6,
                             tension: 0.1,
                             fill: true,
@@ -86,30 +108,71 @@
                         responsive: true,
                         maintainAspectRatio: true,
                         scales: {
-                            y: {
-                                ticks: { color: '#9ca3af' },
-                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                            },
-                            x: {
-                                ticks: { color: '#9ca3af' },
-                                grid: { display: false }
-                            }
+                            y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                            x: { ticks: { color: '#9ca3af' }, grid: { display: false } }
                         },
                         plugins: {
-                            legend: {
-                                labels: { color: '#d1d5db' }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1f2937',
-                                titleColor: '#ffffff',
-                                bodyColor: '#d1d5db',
-                                displayColors: false
-                            }
+                            legend: { labels: { color: '#d1d5db' } },
+                            tooltip: { backgroundColor: '#1f2937', titleColor: '#ffffff', bodyColor: '#d1d5db', displayColors: false }
                         }
                     }
                 });
             }
         }
+
+        // Lógica do Modal e Gemini API via Backend
+        const explainButton = document.getElementById('explain-button');
+        const aiModal = document.getElementById('ai-modal');
+        const closeModalButton = document.getElementById('close-modal-button');
+        const aiExplanationDiv = document.getElementById('ai-explanation');
+        const cryptoName = "{{ crypto.name }}";
+
+        // Função para chamar a API via backend do Django
+        async function getAIExplanation() {
+            aiExplanationDiv.innerHTML = `<div class="flex justify-center items-center h-32"><div class="spinner !border-t-cyan-400" style="display: block; width: 40px; height: 40px; border-width: 4px;"></div></div>`;
+            
+            try {
+                const response = await fetch("{% url 'core:api_explain_crypto' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}' // Importante para segurança
+                    },
+                    body: JSON.stringify({ crypto_name: cryptoName })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    aiExplanationDiv.innerText = result.explanation;
+                } else {
+                    throw new Error(result.error || "Ocorreu um erro desconhecido no servidor.");
+                }
+
+            } catch (error) {
+                console.error("Erro ao chamar o backend:", error);
+                aiExplanationDiv.innerText = "Desculpe, não foi possível obter a explicação no momento. Verifique o console para mais detalhes.";
+                aiExplanationDiv.classList.add('text-red-400');
+            }
+        }
+
+        // Abrir modal
+        explainButton.addEventListener('click', () => {
+            aiModal.classList.add('visible');
+            getAIExplanation();
+        });
+
+        // Fechar modal
+        const closeModal = () => {
+            aiModal.classList.remove('visible');
+        };
+
+        closeModalButton.addEventListener('click', closeModal);
+        aiModal.addEventListener('click', (event) => {
+            if (event.target === aiModal) {
+                closeModal();
+            }
+        });
     });
 </script>
 {% endblock %}

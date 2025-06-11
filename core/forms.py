@@ -29,9 +29,31 @@ class UserProfileAPIForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxInput(attrs={'class': 'h-5 w-5 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500'})
     )
+    enable_auto_trading = forms.BooleanField(
+        label=_("Ativar Agente de Trading Automático"),
+        required=False,
+        help_text=_("Se marcado, o agente de IA poderá executar operações automaticamente com base na sua estratégia.")
+    )
+    agent_buy_risk_percentage = forms.DecimalField(
+        label=_("Risco por Compra (%)"),
+        min_value=Decimal('0.1'),
+        max_value=Decimal('100.0'),
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'step': '0.1'})
+    )
+    agent_sell_risk_percentage = forms.DecimalField(
+        label=_("Percentual de Venda (%)"),
+        min_value=Decimal('1.0'),
+        max_value=Decimal('100.0'),
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'step': '1.0'})
+    )
+    
     class Meta:
         model = UserProfile
-        fields = ['binance_api_key', 'binance_api_secret', 'preferred_fiat_currency', 'use_testnet']
+        fields = [
+            'binance_api_key', 'binance_api_secret', 'preferred_fiat_currency', 
+            'use_testnet', 'enable_auto_trading', 
+            'agent_buy_risk_percentage', 'agent_sell_risk_percentage'
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -50,7 +72,6 @@ class UserProfileAPIForm(forms.ModelForm):
         if commit: profile.save()
         return profile
 
-# FORMULÁRIO REINSERIDO
 class TransactionForm(forms.ModelForm):
     transaction_date = forms.DateTimeField(label=_("Data da Transação"), widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-input'}), initial=timezone.now)
     cryptocurrency = forms.ModelChoiceField(queryset=Cryptocurrency.objects.all().order_by('name'), widget=forms.Select(attrs={'class': 'form-input'}), label=_("Criptomoeda"))

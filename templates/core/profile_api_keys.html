@@ -37,6 +37,38 @@
                     <p class="text-gray-400">{{ form.use_testnet.help_text|safe }}</p>
                 </div>
             </div>
+            
+            <hr class="border-gray-600 my-6">
+            <div>
+                <h3 class="text-lg font-medium leading-6 text-white">Agente de Trading IA</h3>
+                <p class="mt-1 text-sm text-gray-400">Permita que nossa IA execute trades automaticamente para você com base na análise de mercado.</p>
+            </div>
+            <div class="relative flex items-start pt-4">
+                <div class="flex h-6 items-center">
+                    <input id="{{ form.enable_auto_trading.id_for_label }}" name="{{ form.enable_auto_trading.html_name }}" type="checkbox" {% if form.instance.enable_auto_trading %}checked{% endif %} class="h-5 w-5 rounded border-gray-500 bg-gray-700 text-purple-500 focus:ring-purple-600">
+                </div>
+                <div class="ml-3 text-sm leading-6">
+                    <label for="{{ form.enable_auto_trading.id_for_label }}" class="font-medium text-gray-200">{{ form.enable_auto_trading.label }}</label>
+                    <p class="text-gray-400">{{ form.enable_auto_trading.help_text|safe }}</p>
+                </div>
+            </div>
+            
+            <!-- (ADICIONADO) Campos de gerenciamento de risco -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+                <div>
+                    <label for="{{ form.agent_buy_risk_percentage.id_for_label }}" class="form-label">{{ form.agent_buy_risk_percentage.label_tag }}</label>
+                    {{ form.agent_buy_risk_percentage }}
+                    <p class="mt-1 text-xs text-gray-500">{{ form.agent_buy_risk_percentage.help_text|safe }}</p>
+                    {% for error in form.agent_buy_risk_percentage.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+                </div>
+                <div>
+                    <label for="{{ form.agent_sell_risk_percentage.id_for_label }}" class="form-label">{{ form.agent_sell_risk_percentage.label_tag }}</label>
+                    {{ form.agent_sell_risk_percentage }}
+                    <p class="mt-1 text-xs text-gray-500">{{ form.agent_sell_risk_percentage.help_text|safe }}</p>
+                    {% for error in form.agent_sell_risk_percentage.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+                </div>
+            </div>
+
         </div>
         <div class="mt-8">
             <button type="submit" class="btn-primary w-full">
@@ -46,7 +78,6 @@
         </div>
     </form>
     
-    <!-- Seção de Ações Perigosas -->
     <div class="mt-10 pt-6 border-t border-red-500/30">
         <h3 class="text-lg font-semibold text-red-400">Zona de Perigo</h3>
         <p class="mt-1 text-sm text-gray-400">Use as ações abaixo se notar inconsistências nos seus dados de portfólio.</p>

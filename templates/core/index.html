@@ -2,21 +2,31 @@
 {% load static %}
 {% load i18n %}
 
-{% block title %}Crypto Trader Pro - Sua Plataforma de Trading{% endblock %}
+{% block title %}Crypto Trader Pro - Sua Plataforma de Trading Inteligente{% endblock %}
 
 {% block content %}
 <div class="text-center">
     <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
-        Controle Total Sobre Seus Ativos Digitais
+        Trading Inteligente para Seus Ativos Digitais
     </h1>
     <p class="text-lg sm:text-xl text-gray-400 mb-10 max-w-3xl mx-auto">
-        Conecte sua conta da Binance e tenha acesso a um dashboard poderoso com gráficos, análise de performance e ferramentas de negociação avançadas.
+        Conecte sua conta da Binance a um dashboard poderoso e deixe que nosso agente com IA Gemini encontre as melhores oportunidades para você.
     </p>
     
     <div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl max-w-4xl mx-auto">
         <h2 class="text-2xl sm:text-3xl font-semibold text-white mb-8">Funcionalidades Principais</h2>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
+            <!-- Funcionalidade Nova -->
+            <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                    <i class="fas fa-robot fa-lg text-purple-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">Agente de Trading com IA</h3>
+                    <p class="text-gray-400 mt-1">Nosso novo agente, com tecnologia Gemini, analisa dados técnicos e sentimento de mercado para gerar sinais de compra e venda, com gerenciamento de risco integrado.</p>
+                </div>
+            </div>
             <div class="flex items-start space-x-4">
                 <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
                     <i class="fas fa-chart-pie fa-lg text-cyan-400"></i>
@@ -32,7 +42,7 @@
                 </div>
                 <div>
                     <h3 class="text-lg font-bold text-white">Negociação Completa</h3>
-                    <p class="text-gray-400 mt-1">Execute ordens a mercado ou a limite diretamente pela nossa interface, com suporte total aos ambientes Testnet e Mainnet da Binance.</p>
+                    <p class="text-gray-400 mt-1">Execute ordens manuais a mercado ou a limite diretamente pela nossa interface, com suporte total aos ambientes Testnet e Mainnet.</p>
                 </div>
             </div>
             <div class="flex items-start space-x-4">
@@ -44,20 +54,11 @@
                     <p class="text-gray-400 mt-1">Suas chaves de API são criptografadas e você tem controle total sobre o ambiente de negociação, com avisos claros para operações na Mainnet.</p>
                 </div>
             </div>
-            <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <i class="fas fa-sync-alt fa-lg text-cyan-400"></i>
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-white">Dados em Tempo Real</h3>
-                    <p class="text-gray-400 mt-1">Os preços dos ativos e as taxas de câmbio são atualizados em segundo plano, garantindo que suas análises sejam sempre precisas.</p>
-                </div>
-            </div>
         </div>
 
         {% if not user.is_authenticated %}
         <div class="mt-12 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <a href="{% url 'core:register' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Crie sua Conta Gratuitamente</a>
+            <a href="{% url 'core:register' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Crie sua Conta e Ative o Agente</a>
         </div>
         {% else %}
         <div class="mt-12">
@@ -67,8 +68,10 @@
     </div>
 
     <div class="mt-16 p-6 max-w-4xl mx-auto">
-        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">O Futuro é Inteligente: Próximos Passos</h3>
-        <p class="text-gray-400 text-lg leading-relaxed">Estamos trabalhando para integrar análises com IA (Gemini) para resumir notícias de mercado e fornecer insights, além de finalizar a sincronização completa do seu histórico de transações.</p>
+        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">O Futuro é Autônomo</h3>
+        <p class="text-gray-400 text-lg leading-relaxed">
+            Estamos evoluindo o Crypto Trader Pro de um painel de controle para um copiloto de investimentos. A integração profunda com a IA Gemini permitirá a automação de estratégias complexas, otimização contínua e a descoberta de oportunidades que seriam imperceptíveis ao olho humano.
+        </p>
     </div>
 </div>
 {% endblock %}

@@ -7,7 +7,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import csv
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+import requests
 from .forms import (
     CustomUserCreationForm, CustomAuthenticationForm, UserProfileAPIForm,
     TransactionForm, LimitBuyForm, LimitSellForm, MarketBuyForm, MarketSellForm
@@ -49,11 +50,7 @@ def recalculate_holdings(user_profile):
     Holding.objects.filter(user_profile=user_profile).delete()
     transacted_cryptos = Cryptocurrency.objects.filter(transactions__user_profile=user_profile).distinct()
     
-    print(f"\n--- INICIANDO RECÁLCULO DE PORTFÓLIO PARA {user_profile.user.username} ---")
-    print(f"Criptomoedas transacionadas encontradas: {[c.symbol for c in transacted_cryptos]}")
-
     for crypto in transacted_cryptos:
-        print(f"\nProcessando {crypto.symbol}...")
         buys = Transaction.objects.filter(user_profile=user_profile, cryptocurrency=crypto, transaction_type='BUY').aggregate(
             total_qty=Sum('quantity_crypto', default=Decimal('0.0')),
             total_cost=Sum('total_value', default=Decimal('0.0'))
@@ -61,27 +58,16 @@ def recalculate_holdings(user_profile):
         sells = Transaction.objects.filter(user_profile=user_profile, cryptocurrency=crypto, transaction_type='SELL').aggregate(
             total_qty=Sum('quantity_crypto', default=Decimal('0.0'))
         )
-
         total_qty_bought = buys.get('total_qty') or Decimal('0.0')
         total_cost_of_buys = buys.get('total_cost') or Decimal('0.0')
         total_qty_sold = sells.get('total_qty') or Decimal('0.0')
-        
-        print(f"  Total Comprado: Qtd={total_qty_bought}, Custo={total_cost_of_buys}")
-        print(f"  Total Vendido:  Qtd={total_qty_sold}")
-
         final_quantity = total_qty_bought - total_qty_sold
-        print(f"  => Saldo Final Calculado: {final_quantity}")
-
         if final_quantity > Decimal('0.00000001'):
             avg_price = (total_cost_of_buys / total_qty_bought) if total_qty_bought > 0 else Decimal('0.0')
-            print(f"  DECISÃO: Criar Holding com Qtd={final_quantity}, Preço Médio={avg_price}")
             Holding.objects.create(
                 user_profile=user_profile, cryptocurrency=crypto,
                 quantity=final_quantity, average_buy_price=avg_price
             )
-        else:
-            print(f"  DECISÃO: Não criar holding para {crypto.symbol} (saldo zerado ou negativo).")
-    print("--- FIM DO RECÁLCULO DE PORTFÓLIO ---\n")
 
 @db_transaction.atomic
 def _process_successful_order(user_profile, order_response, crypto):
@@ -133,20 +119,14 @@ def logout_view(request):
 @login_required
 def dashboard_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    
     holdings_list = list(Holding.objects.filter(user_profile=user_profile, quantity__gt=0).select_related('cryptocurrency'))
     pref_currency = user_profile.preferred_fiat_currency
     snapshots_list = list(PortfolioSnapshot.objects.filter(user_profile=user_profile, currency=pref_currency).order_by('date'))
     exchange_rates_list = list(ExchangeRate.objects.filter(from_currency=BASE_RATE_CURRENCY))
-    
     exchange_rates = {rate.to_currency: rate.rate for rate in exchange_rates_list}
     exchange_rates[BASE_RATE_CURRENCY] = Decimal('1.0')
     rate_to_pref_currency = exchange_rates.get(pref_currency)
-    
-    enriched_holdings = []
-    pie_chart_data = {'labels': [], 'data': []}
-    total_portfolio_value = Decimal('0.0')
-
+    enriched_holdings, pie_chart_data, total_portfolio_value = [], {'labels': [], 'data': []}, Decimal('0.0')
     if rate_to_pref_currency:
         for holding in holdings_list:
             current_value_pref = (holding.current_market_value or 0) * rate_to_pref_currency
@@ -158,67 +138,34 @@ def dashboard_view(request):
             if current_value_pref > 0 and cost_basis_pref > 0:
                 profit_loss_pref = current_value_pref - cost_basis_pref
                 profit_loss_percent = (profit_loss_pref / cost_basis_pref) * 100
-            enriched_holdings.append({
-                'holding': holding, 'average_buy_price_display': avg_buy_price_pref,
-                'current_price_display': current_price_pref, 'current_value_display': current_value_pref,
-                'profit_loss_display': profit_loss_pref, 'profit_loss_percent_display': profit_loss_percent,
-                'display_currency': pref_currency
-            })
+            enriched_holdings.append({'holding': holding, 'average_buy_price_display': avg_buy_price_pref, 'current_price_display': current_price_pref, 'current_value_display': current_value_pref, 'profit_loss_display': profit_loss_pref, 'profit_loss_percent_display': profit_loss_percent, 'display_currency': pref_currency})
             if current_value_pref > 0:
                 pie_chart_data['labels'].append(holding.cryptocurrency.symbol)
                 pie_chart_data['data'].append(float(current_value_pref))
     else:
         messages.warning(request, f"Não foi possível encontrar a taxa de câmbio para sua moeda preferida ({pref_currency}).")
-
-    line_chart_data = {'labels': [], 'data': []}
-    for snapshot in snapshots_list[-30:]:
-        line_chart_data['labels'].append(snapshot.date.strftime('%d/%m'))
-        line_chart_data['data'].append(float(snapshot.total_value))
-
-    context = {
-        'page_title': 'Meu Dashboard', 'holdings': enriched_holdings,
-        'total_portfolio_value': total_portfolio_value, 'portfolio_currency': pref_currency,
-        'pie_chart_data_json': json.dumps(pie_chart_data),
-        'line_chart_data_json': json.dumps(line_chart_data)
-    }
+    line_chart_data = {'labels': [s.date.strftime('%d/%m') for s in snapshots_list[-30:]], 'data': [float(s.total_value) for s in snapshots_list[-30:]]}
+    context = {'page_title': 'Meu Dashboard', 'holdings': enriched_holdings, 'total_portfolio_value': total_portfolio_value, 'portfolio_currency': pref_currency, 'pie_chart_data_json': json.dumps(pie_chart_data), 'line_chart_data_json': json.dumps(line_chart_data)}
     return render(request, 'core/dashboard.html', context)
 
 @login_required
 def reports_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     holdings = Holding.objects.filter(user_profile=user_profile).select_related('cryptocurrency')
-
     pref_currency = user_profile.preferred_fiat_currency
     exchange_rates = {rate.to_currency: rate.rate for rate in ExchangeRate.objects.filter(from_currency=BASE_RATE_CURRENCY)}
     exchange_rates[BASE_RATE_CURRENCY] = Decimal('1.0')
     rate_to_pref_currency = exchange_rates.get(pref_currency)
-    
-    total_current_value = Decimal('0.0')
-    total_cost_basis = Decimal('0.0')
-
+    total_current_value, total_cost_basis = Decimal('0.0'), Decimal('0.0')
     if rate_to_pref_currency:
         for holding in holdings:
-            if holding.current_market_value is not None:
-                total_current_value += holding.current_market_value * rate_to_pref_currency
-            if holding.cost_basis is not None:
-                total_cost_basis += holding.cost_basis * rate_to_pref_currency
+            if holding.current_market_value is not None: total_current_value += holding.current_market_value * rate_to_pref_currency
+            if holding.cost_basis is not None: total_cost_basis += holding.cost_basis * rate_to_pref_currency
     else:
         messages.warning(request, f"Taxa de câmbio para {pref_currency} não encontrada. Os valores podem estar incorretos.")
-
     total_profit_loss = total_current_value - total_cost_basis
-    
-    roi = None
-    if total_cost_basis > 0:
-        roi = (total_profit_loss / total_cost_basis) * 100
-
-    context = {
-        'page_title': 'Relatório de Performance',
-        'total_current_value': total_current_value,
-        'total_cost_basis': total_cost_basis,
-        'total_profit_loss': total_profit_loss,
-        'roi': roi,
-        'portfolio_currency': pref_currency,
-    }
+    roi = (total_profit_loss / total_cost_basis) * 100 if total_cost_basis > 0 else None
+    context = {'page_title': 'Relatório de Performance', 'total_current_value': total_current_value, 'total_cost_basis': total_cost_basis, 'total_profit_loss': total_profit_loss, 'roi': roi, 'portfolio_currency': pref_currency}
     return render(request, 'core/reports.html', context)
 
 @login_required
@@ -240,21 +187,20 @@ def reset_portfolio_view(request):
     Transaction.objects.filter(user_profile=user_profile).delete()
     Holding.objects.filter(user_profile=user_profile).delete()
     PortfolioSnapshot.objects.filter(user_profile=user_profile).delete()
-    messages.success(request, 'Seus dados de portfólio local (transações, posses, snapshots) foram zerados. Sincronize com a Binance para recriar seus dados.')
+    messages.success(request, 'Seus dados de portfólio local foram zerados.')
     return redirect('core:dashboard')
 
 @login_required
 def recalculate_holdings_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     recalculate_holdings(user_profile)
-    messages.success(request, 'Seu portfólio foi recalculado com sucesso a partir do seu histórico de transações!')
+    messages.success(request, 'Seu portfólio foi recalculado com sucesso!')
     return redirect('core:dashboard')
 
 @login_required
 def cryptocurrency_list_view(request):
     client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, testnet=True)
     cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
-    
     enriched_cryptos_data = []
     for crypto in cryptos_from_db:
         data = {'db_instance': crypto}
@@ -264,55 +210,106 @@ def cryptocurrency_list_view(request):
         except BinanceAPIException:
             data.update({'price_change_percent_24h': None})
         enriched_cryptos_data.append(data)
-
-    paginator = Paginator(enriched_cryptos_data, 20)
-    page_number = request.GET.get('page')
-
+    paginator, page_number = Paginator(enriched_cryptos_data, 20), request.GET.get('page')
     try:
         cryptocurrencies_page = paginator.page(page_number)
     except PageNotAnInteger:
         cryptocurrencies_page = paginator.page(1)
     except EmptyPage:
         cryptocurrencies_page = paginator.page(paginator.num_pages)
-
-    return render(request, 'core/cryptocurrency_list.html', {
-        'page_title': 'Lista de Criptomoedas',
-        'cryptocurrencies_page': cryptocurrencies_page
-    })
-
+    return render(request, 'core/cryptocurrency_list.html', {'page_title': 'Lista de Criptomoedas', 'cryptocurrencies_page': cryptocurrencies_page})
 
 @login_required
 def cryptocurrency_detail_view(request, symbol):
     crypto = get_object_or_404(Cryptocurrency, symbol__iexact=symbol)
-    klines_data_json = "[]"; chart_error_message = None
+    klines_data_json, chart_error_message = "[]", None
     client = get_valid_api_client(request.user.profile) or Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, testnet=True)
     if client:
         try:
             api_symbol_pair = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
             klines = client.get_historical_klines(api_symbol_pair, Client.KLINE_INTERVAL_1DAY, "90 days ago UTC")
             if klines:
-                chart_labels = [datetime.datetime.fromtimestamp(k[0]/1000, tz=datetime.timezone.utc).strftime('%Y-%m-%d') for k in klines]
-                chart_data_close = [str(Decimal(k[4])) for k in klines]
-                klines_data = {'labels': chart_labels, 'data': chart_data_close, 'currency': crypto.price_currency}
+                klines_data = {'labels': [datetime.datetime.fromtimestamp(k[0]/1000, tz=datetime.timezone.utc).strftime('%Y-%m-%d') for k in klines], 'data': [str(Decimal(k[4])) for k in klines], 'currency': crypto.price_currency}
                 klines_data_json = json.dumps(klines_data)
-        except BinanceAPIException as e: chart_error_message = f"Erro ao buscar dados do gráfico: {e.message}"
-    else: chart_error_message = "Chaves API não configuradas."
+        except BinanceAPIException as e:
+            chart_error_message = f"Erro ao buscar dados do gráfico: {e.message}"
+    else:
+        chart_error_message = "Chaves API não configuradas."
     if chart_error_message: messages.error(request, chart_error_message)
     context = {'page_title': f"Detalhes de {crypto.name}", 'crypto': crypto, 'klines_data_json': klines_data_json, 'chart_error_message': chart_error_message}
     return render(request, 'core/cryptocurrency_detail.html', context)
 
 @login_required
+def explain_crypto_with_ai_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Apenas o método POST é permitido'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        crypto_name = data.get('crypto_name')
+        if not crypto_name:
+            return JsonResponse({'error': 'Nome da criptomoeda não fornecido no pedido.'}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Corpo do pedido em formato JSON inválido.'}, status=400)
+
+    gemini_api_key = settings.GEMINI_API_KEY
+    if not gemini_api_key:
+        return JsonResponse({'error': 'A chave da API do Gemini não foi configurada no servidor.'}, status=500)
+
+    prompt = f"Explique de forma simples e concisa para um iniciante o que é a criptomoeda {crypto_name} e qual o seu principal propósito ou caso de uso. Responda em português do Brasil."
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+    headers = {'Content-Type': 'application/json'}
+
+    try:
+        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
+        
+        if response.status_code == 403:
+            return JsonResponse({'error': 'Erro 403: Acesso Negado. Verifique se a sua chave de API do Gemini é válida, se a API está ativada no seu projeto Google Cloud e se não há restrições de IP ou domínio.'}, status=403)
+
+        response.raise_for_status() # Lança um erro para status HTTP 4xx/5xx
+        result = response.json()
+
+        # Análise mais segura da resposta
+        if "candidates" in result and result["candidates"]:
+            candidate = result["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"] and candidate["content"]["parts"]:
+                text = candidate["content"]["parts"][0].get("text")
+                if text:
+                    return JsonResponse({'explanation': text})
+        
+        # Se não encontrou o texto, retorna um erro detalhado
+        return JsonResponse({
+            'error': 'Resposta da API do Gemini recebida, mas em formato inesperado.',
+            'api_response': result # Envia a resposta da API para depuração
+        }, status=500)
+
+    except requests.exceptions.Timeout:
+        return JsonResponse({'error': 'O pedido para a API do Gemini demorou demasiado tempo a responder (timeout).'}, status=504)
+    except requests.exceptions.HTTPError as e:
+        return JsonResponse({'error': f'Erro HTTP da API do Gemini: {e}. Verifique a consola do servidor para a resposta completa.'}, status=e.response.status_code)
+    except requests.exceptions.RequestException as e:
+        return JsonResponse({'error': f'Erro de comunicação com a API do Gemini: {e}'}, status=502)
+    except Exception as e:
+        return JsonResponse({'error': f'Ocorreu um erro inesperado no servidor: {e}'}, status=500)
+
+
+@login_required
 def open_orders_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     client = get_valid_api_client(user_profile)
-    if not client: messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    if not client:
+        messages.error(request, "Chaves API inválidas.")
+        return redirect('core:update_api_keys')
     if request.method == 'POST':
-        order_id = request.POST.get('order_id'); symbol = request.POST.get('symbol')
+        order_id = request.POST.get('order_id')
+        symbol = request.POST.get('symbol')
         if order_id and symbol:
             try:
                 client.cancel_order(symbol=symbol, orderId=order_id)
                 messages.success(request, f"Ordem {order_id} cancelada.")
-            except BinanceAPIException as e: messages.error(request, f"Erro ao cancelar: {e.message}")
+            except BinanceAPIException as e:
+                messages.error(request, f"Erro ao cancelar: {e.message}")
         return redirect('core:open_orders')
     processed_orders = []
     try:
@@ -321,8 +318,10 @@ def open_orders_view(request):
             order['time_dt'] = datetime.datetime.fromtimestamp(order['time'] / 1000, tz=datetime.timezone.utc)
             order['total_value'] = Decimal(order['price']) * Decimal(order['origQty'])
             processed_orders.append(order)
-    except BinanceAPIException as e: messages.error(request, f"Erro ao buscar ordens: {e.message}")
+    except BinanceAPIException as e:
+        messages.error(request, f"Erro ao buscar ordens: {e.message}")
     return render(request, 'core/open_orders.html', {'page_title': 'Minhas Ordens Abertas', 'open_orders': processed_orders})
+
 
 @login_required
 def transaction_history_view(request):
@@ -341,11 +340,12 @@ def transaction_history_view(request):
         'page_title': 'Histórico de Transações'
     })
 
+
 @login_required
 def export_transactions_csv_view(request):
     filename = f"historico_transacoes_{request.user.username}_{timezone.now().strftime('%Y%m%d')}.csv"
     response = HttpResponse(
-        content_type='text/csv',
+        content_type='text/csv; charset=utf-8',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
     response.write(u'\ufeff'.encode('utf8'))
@@ -376,7 +376,9 @@ def add_transaction_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     form = TransactionForm(request.POST or None, user_profile=user_profile)
     if request.method == 'POST' and form.is_valid():
-        tx = form.save(commit=False); tx.user_profile = user_profile; tx.save()
+        tx = form.save(commit=False)
+        tx.user_profile = user_profile
+        tx.save()
         recalculate_holdings(user_profile)
         messages.success(request, "Transação manual registrada e portfólio recalculado!")
         return redirect('core:dashboard')

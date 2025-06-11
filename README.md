@@ -1,91 +1,67 @@
-# Projeto Trader de Criptomoedas com Django e Binance API
+# Crypto Trader Pro com Agente de IA (Gemini)
 
-Este é um projeto Django para criar uma plataforma de compra e venda de criptomoedas, utilizando a API da Binance para dados de mercado e transações.
+Este é um projeto Django que cria uma plataforma avançada de gerenciamento e negociação de criptomoedas, utilizando a API da Binance para dados de mercado e transações, e o poder do Google Gemini para análise estratégica e geração de sinais de trading.
 
-## Funcionalidades Planejadas
-* Autenticação de Usuários
-* Dashboard com portfólio de criptomoedas e saldos
-* Visualização de preços de criptomoedas em tempo real
-* Gráficos de histórico de preços
-* Funcionalidade de Compra e Venda de criptomoedas via API da Binance
-* Histórico de Transações
-* Relatórios de Análise de Performance
-* Integração com Gemini para auxílio em tomadas de decisão (a ser detalhado)
+## Funcionalidades
 
-## Configuração Inicial
+* **Autenticação Completa de Usuários:** Registro, login, logout e gerenciamento de perfil.
+* **Conectividade Segura com a Binance:** Armazenamento seguro de chaves API com criptografia forte e seleção de ambiente (Testnet/Mainnet).
+* **Dashboard Analítico:**
+    * Visualização do valor total do portfólio em tempo real.
+    * Gráficos interativos com a distribuição de ativos e histórico de valor.
+    * Tabela de posses com cálculo de Lucro/Prejuízo.
+* **Negociação Manual Completa:**
+    * Execução de ordens de **Compra e Venda a Mercado**.
+    * Criação de ordens de **Compra e Venda a Limite**.
+    * Visualização e cancelamento de ordens abertas.
+* **Recursos Inteligentes (Gemini API):**
+    * **"Explique este Ativo"**: Análise de criptomoedas sob demanda nas páginas de detalhe.
+    * **Análise de Sentimento de Mercado**: Tarefas em segundo plano que analisam notícias e geram scores de sentimento.
+
+## Próximo Grande Passo: Agente de Trading Autônomo
+
+A fase atual de desenvolvimento está focada em construir um **agente de trading semi ou totalmente autônomo**, transformando a plataforma em uma ferramenta de nível profissional.
+
+1.  **Módulo de Análise de Dados**: Implementar tarefas assíncronas (Celery) para calcular e salvar continuamente indicadores de **análise técnica** (RSI, MACD, Bandas de Bollinger) e **sentimento de mercado** (via Gemini).
+
+2.  **Cérebro de Decisão (Gemini Core)**: Desenvolver um ciclo de decisão onde os dados coletados são enviados ao Gemini para obter um **sinal de trade completo** (Comprar/Vender/Manter, score de confiança, sugestões de stop-loss/take-profit e justificativa).
+
+3.  **Interface de Controle do Agente**: Criar uma nova seção no app onde o usuário poderá **ativar/desativar** o agente, configurar seu perfil de risco e visualizar o histórico de decisões tomadas pela IA.
+
+4.  **Execução Automatizada**: Conectar os sinais de alta confiança do agente diretamente com a API da Binance para a execução de ordens.
+
+## Configuração do Ambiente
 
 ### Pré-requisitos
-* Python 3.10 ou superior
-* Pip (gerenciador de pacotes Python)
-* Virtualenv (recomendado)
+* Python 3.10+
+* Pip e Virtualenv
+* Redis
+* **Bibliotecas Adicionais:** `pandas-ta`
 
 ### Passos para Configuração
-1.  **Clone o repositório (ou crie os arquivos conforme fornecido):**
-    Crie uma pasta para o seu projeto e coloque os arquivos dentro dela, mantendo a estrutura de pastas.
+1.  **Clone o repositório.**
 
-2.  **Crie e Ative um Ambiente Virtual:**
-    ```bash
-    python -m venv venv
-    # No Windows
-    venv\Scripts\activate
-    # No macOS/Linux
-    source venv/bin/activate
-    ```
+2.  **Crie e ative um ambiente virtual.**
 
-3.  **Instale as Dependências:**
-    Navegue até a pasta raiz do projeto (onde `requirements.txt` e `manage.py` estão localizados) e execute:
+3.  **Instale as dependências:**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Execute as Migrações Iniciais:**
+4.  **Configure as variáveis de ambiente:**
+    * Copie o arquivo `.env.example` para `.env`.
+    * Preencha as variáveis, incluindo `DJANGO_SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, suas chaves da **API da Binance** e sua chave da **API do Gemini** (`GEMINI_API_KEY`).
+
+5.  **Execute as migrações e crie um superusuário.**
     ```bash
     python manage.py migrate
-    ```
-
-5.  **Crie um Superusuário (para acesso ao Admin):**
-    ```bash
     python manage.py createsuperuser
     ```
-    Siga as instruções para definir nome de usuário, email e senha.
 
-6.  **Execute o Servidor de Desenvolvimento:**
-    ```bash
-    python manage.py runserver
-    ```
-    A aplicação estará disponível em `http://127.0.0.1:8000/`.
-    A área administrativa estará disponível em `http://127.0.0.1:8000/admin/`.
+6.  **Inicie os serviços (em terminais separados):**
+    * **Servidor Django:** `python manage.py runserver`
+    * **Celery Worker:** `celery -A crypto_trader worker -l info`
+    * **Celery Beat (Agendador):** `celery -A crypto_trader beat -l info`
 
-## Estrutura do Projeto (Inicial)
+A aplicação estará disponível em `http://127.0.0.1:8000/`.
 
-
-crypto_trader_project/
-├── manage.py                 # Utilitário de linha de comando do Django
-├── crypto_trader/            # Pasta do projeto Django
-│   ├── init.py
-│   ├── asgi.py               # Configuração ASGI para servidores assíncronos
-│   ├── settings.py           # Configurações do projeto
-│   ├── urls.py               # URLs do projeto principal
-│   └── wsgi.py               # Configuração WSGI para servidores síncronos
-├── core/                     # Aplicação 'core' para funcionalidades principais
-│   ├── init.py
-│   ├── admin.py              # Configuração do Admin para os modelos do app
-│   ├── apps.py               # Configuração do app
-│   ├── migrations/           # Migrações do banco de dados
-│   │   └── init.py
-│   ├── models.py             # Modelos do banco de dados do app
-│   ├── tests.py              # Testes para o app
-│   ├── views.py              # Views (lógica de requisição/resposta) do app
-│   └── urls.py               # URLs específicas do app 'core'
-├── templates/                # Pasta para templates HTML
-│   └── core/
-│       ├── base.html         # Template base (com Tailwind CSS)
-│       └── index.html        # Página inicial de exemplo
-└── requirements.txt          # Dependências do projeto
-
-
-## Próximos Passos
-* Implementar autenticação de usuários.
-* Conectar com a API da Binance.
-* Definir modelos de dados para portfólio e transações.
-* Criar interfaces para visualização de dados e trading.

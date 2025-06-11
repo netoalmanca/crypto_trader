@@ -1,129 +1,94 @@
-Visão Geral do Projeto: Crypto Trader Pro (Atualizado)
-1. Visão Geral
-O "Crypto Trader Pro" é uma aplicação web robusta, construída com Django, projetada para ser um painel completo de gerenciamento e negociação de portfólio de criptomoedas. A aplicação se integra diretamente com a API da Binance, permitindo que os usuários conectem suas contas para buscar dados de mercado, executar ordens de negociação em tempo real e analisar o desempenho de seus ativos.
+Visão Geral do Projeto: Crypto Trader Pro (Fase 2 - Agente de Trading)
 
-2. Arquitetura e Componentes Principais
+Visão Geral
+O "Crypto Trader Pro" é uma aplicação web robusta, construída com Django, projetada para ser um painel completo de gerenciamento e negociação de portfólio de criptomoedas. Nesta segunda fase, o projeto evolui para incluir um Agente de Trading Inteligente, que utiliza a IA generativa do Google Gemini para analisar o mercado e auxiliar na tomada de decisões estratégicas de compra e venda.
+
+Arquitetura e Componentes Principais
+
 Backend: Django
 
-Frontend: Templates Django renderizados no servidor com Tailwind CSS para estilização e Chart.js para visualização de dados.
+Frontend: Templates Django, Tailwind CSS, Chart.js, Alpine.js
 
-Banco de Dados: SQLite (configurado para desenvolvimento).
+Banco de Dados: SQLite (desenvolvimento), PostgreSQL (recomendado para produção)
 
-Tarefas em Segundo Plano: Celery com Redis como message broker para atualização assíncrona e periódica de preços de mercado e taxas de câmbio.
+Tarefas em Segundo Plano: Celery com Redis para atualização de preços, taxas de câmbio, e para orquestrar o ciclo de análise e decisão do agente de IA.
 
-API Externa: API da Binance, com suporte para os ambientes de Testnet e Mainnet.
+APIs Externas:
 
-3. Funcionalidades Implementadas
-A plataforma já conta com um conjunto abrangente de funcionalidades prontas para uso:
+Binance: Conectividade total (Testnet/Mainnet) para dados de mercado e execução de ordens.
 
-Autenticação e Perfil de Usuário
-Sistema completo de registro, login e logout.
+Google Gemini: Utilizada como o cérebro estratégico para análise de dados e geração de sinais de trading.
 
-Criação automática de um perfil de usuário (UserProfile) no momento do registro.
+Funcionalidades Concluídas (Fase 1)
 
-Página de Configurações Segura: Uma área dedicada (/profile/api-keys/) onde os usuários podem:
+Sistema completo de autenticação e perfil de usuário.
 
-Inserir e atualizar suas chaves de API e Segredo da Binance.
+Armazenamento seguro de chaves de API com criptografia robusta.
 
-Criptografia Automática: As chaves são criptografadas com a biblioteca cryptography (usando o algoritmo Fernet) antes de serem salvas no banco de dados, garantindo que não fiquem expostas.
+Dashboard analítico com valor de portfólio, distribuição de ativos e histórico de valor.
 
-Seleção de Ambiente (Testnet/Mainnet): O usuário pode escolher ativamente se suas operações de trade serão executadas no ambiente de teste (Testnet) ou no ambiente real (Mainnet). A interface exibe avisos visuais claros e proeminentes para alertar o usuário quando o modo Mainnet está ativo.
+Execução de ordens manuais (Mercado e Limite) e gerenciamento de ordens abertas.
 
-Definir sua moeda fiduciária preferida (BRL, USD, EUR) para visualização de valores.
+Sincronização de histórico de transações com a Binance.
 
-Dashboard e Análise de Portfólio
-Visão Geral Consolidada: O dashboard principal exibe o valor total do portfólio, convertido para a moeda preferida do usuário.
+Geração de relatórios de performance (ROI, P/L).
 
-Gráficos de Análise:
+Próximos Passos (Fase 2 - Implementação do Agente de Trading)
 
-Distribuição de Ativos (Gráfico de Pizza): Um gráfico do tipo "donut" mostra a distribuição percentual de cada criptomoeda com base em seu valor atual no portfólio.
+O foco principal agora é a construção e integração do módulo trading_agent, transformando a plataforma em uma ferramenta de trading semi ou totalmente automatizada.
 
-Histórico de Valor (Gráfico de Linha): Um gráfico de linha exibe a evolução do valor total do portfólio nos últimos 30 dias, utilizando snapshots diários salvos automaticamente.
+Passo 1: Construir a Camada de Coleta de Dados (Em Andamento)
 
-Tabela de Posses Detalhada: Uma tabela exibe cada ativo do portfólio com informações cruciais, todas convertidas para a moeda preferida do usuário:
-
-Quantidade
-
-Preço Médio de Compra
-
-Preço Atual (atualizado via Celery)
-
-Valor Atual
-
-Lucro/Prejuízo (L/P) em valor monetário e percentual.
-
-Dados de Mercado e Resiliência
-Atualização Automática (Celery):
-
-update_all_cryptocurrency_prices: Tarefa executada a cada minuto para buscar e salvar os preços atuais das criptomoedas.
-
-update_exchange_rates: Tarefa executada a cada minuto para buscar e salvar as taxas de câmbio (ex: USDT para BRL).
-
-create_daily_portfolio_snapshots: Tarefa diária para salvar o valor total do portfólio, alimentando o gráfico de histórico.
-
-Resiliência das Tarefas: As tarefas Celery foram aprimoradas com mecanismos de retentativa automática (autoretry_for) e backoff exponencial, tornando o sistema robusto contra falhas temporárias de rede ou da API.
-
-Lista de Criptomoedas e Detalhes:
-
-Página (/cryptocurrencies/) que lista as criptomoedas com dados de variação 24h.
-
-Página de detalhe para cada cripto com um gráfico interativo do histórico de preços (últimos 90 dias).
-
-Funcionalidades de Negociação (Trading)
-Ordens a Mercado (Market Orders):
-
-Funcionalidade completa para compra e venda a mercado.
-
-O usuário pode optar por definir a quantidade da criptomoeda ou o valor monetário a ser gasto/recebido.
-
-Ordens Limite (Limit Orders):
-
-Funcionalidade completa para criar ordens de compra e venda a um preço específico.
-
-Gerenciamento de Ordens: Uma página (/open-orders/) permite visualizar e cancelar ordens que ainda não foram executadas.
-
-Gerenciamento de Transações
-Adição Manual: Formulário para registrar transações de compra ou venda manualmente.
-
-Sincronização com a Binance (Parcial): Botão na página de histórico que prepara o terreno para a sincronização completa das transações da conta Binance do usuário.
-
-4. Próximos Passos Sugeridos
-Com a base sólida já estabelecida, os próximos passos se concentram em finalizar funcionalidades de conveniência e expandir os recursos de análise.
-
-Implementação Completa da Sincronização de Histórico (sync_binance_trades_view)
-
-O que: Atualmente, a função existe, mas sua lógica interna precisa ser totalmente desenvolvida. O objetivo é permitir que um novo usuário clique em "Sincronizar" e o sistema busque todo o seu histórico de negociações da Binance, populando automaticamente as tabelas de Transações e Posses.
-
-Como: Iterar sobre todos os pares de criptomoedas que o usuário possui na Binance. Para cada par, usar o endpoint get_my_trades da API. Implementar uma lógica para evitar a duplicação de transações já existentes e para recalcular corretamente o preço médio das posses.
-
-Melhorias na Interface e Experiência do Usuário (UI/UX)
-
-O que: Aprimorar a fluidez e a performance da aplicação em páginas com muitos dados.
+O que: Desenvolver e agendar tarefas Celery para coletar e armazenar dados de forma autônoma.
 
 Como:
 
-Paginação: Adicionar paginação nas tabelas de "Histórico de Transações" e "Lista de Criptomoedas" para evitar o carregamento de centenas de itens de uma só vez.
+Análise Técnica: Implementar uma tarefa (calculate_technical_indicators) que utiliza bibliotecas como pandas-ta para calcular e salvar indicadores (RSI, MACD, Bandas de Bollinger) para os principais ativos.
 
-Feedback Visual: Adicionar indicadores de carregamento (spinners) em botões que disparam ações de API (Comprar, Vender, Sincronizar) para que o usuário saiba que a ação está em andamento.
+Análise de Sentimento: Criar uma tarefa (analyze_market_sentiment) que consome notícias de fontes externas (ex: NewsAPI), formata um prompt para o Gemini e solicita uma análise de sentimento, salvando o resultado (score e resumo).
 
-Relatórios e Análise Avançada de Performance
+Passo 2: Desenvolver o Cérebro do Agente (O Ciclo de Decisão)
 
-O que: Criar uma nova seção de "Relatórios" para oferecer insights mais profundos sobre o desempenho do portfólio.
+O que: Criar o serviço principal que orquestra a análise e a tomada de decisão.
 
 Como:
 
-Cálculo de P/L Geral: Exibir o Lucro/Prejuízo total consolidado de todo o portfólio.
+Implementar uma tarefa Celery principal (execute_trading_cycle) que roda periodicamente.
 
-Métricas de Performance: Calcular e exibir métricas como o Retorno Sobre o Investimento (ROI) total.
+Esta tarefa irá coletar os últimos dados de análise técnica e sentimento do banco de dados.
 
-Exportação de Dados: Permitir que o usuário exporte seu histórico de transações para um arquivo CSV.
+Ela irá formatar um prompt detalhado para o Gemini, incluindo o contexto do mercado e o estado atual do portfólio do usuário.
 
-Integração com IA (Gemini) - Visão de Futuro
+A resposta do Gemini (contendo decisão, confiança, stop-loss, take-profit e justificativa) será salva como um novo objeto TradingSignal no banco de dados.
 
-O que: Utilizar as capacidades da API do Gemini para fornecer análises e informações contextuais.
+Passo 3: Criar a Camada de Execução de Ordens
 
-Como (Fase Inicial):
+O que: Conectar os sinais gerados pela IA às funções de trading da Binance.
 
-Análise de Notícias: Em cada página de detalhe de uma criptomoeda, adicionar uma seção que usa a API do Gemini para buscar e resumir as notícias mais recentes sobre aquele ativo.
+Como: Desenvolver uma função execute_order_from_signal que recebe um TradingSignal. Se o sinal for 'BUY' ou 'SELL' e a confiança for alta, a função irá criar e executar a ordem correspondente na Binance, utilizando a lógica de ajuste de preço e quantidade já existente.
 
-"Explique este Ativo": Um botão que envia o nome da criptomoeda para o Gemini e exibe uma explicação simples sobre seu propósito e tecnologia, ajudando usuários iniciantes.
+Passo 4: Desenvolver a Interface do Agente de Trading
+
+O que: Criar uma nova seção na interface do usuário para controlar e monitorar o agente.
+
+Como:
+
+Adicionar à página de Configurações (profile/api-keys/) um switch para o usuário ativar ou desativar o enable_auto_trading.
+
+Criar uma nova página (/agent/dashboard/) onde o usuário poderá:
+
+Visualizar o status do agente (ativo/inativo).
+
+Ver uma lista de todos os TradingSignal gerados pela IA, com suas justificativas.
+
+Analisar a performance histórica das decisões do agente.
+
+Passo 5: Implementar o Ciclo de Aprendizado (Otimização Contínua)
+
+O que: Utilizar o histórico de trades para refinar as estratégias do agente.
+
+Como:
+
+Criar um script de backtesting que compara os TradingSignal com os resultados reais das negociações.
+
+Desenvolver uma tarefa periódica de "reflexão", onde o Gemini é consultado sobre a performance passada ("Analisando os últimos 10 trades, a estratégia de stop-loss foi eficiente? Sugira melhorias.") para otimizar os prompts e a lógica futura.
