@@ -78,7 +78,10 @@
         {% endif %}
         
         <div class="mt-6 sm:mt-8">
-            <button type="submit" class="btn-primary w-full bg-cyan-600 hover:bg-cyan-500">Executar Compra a Mercado</button>
+            <button type="submit" class="btn-primary w-full bg-cyan-600 hover:bg-cyan-500">
+                <div class="spinner"></div>
+                <span class="btn-text">Executar Compra a Mercado</span>
+            </button>
         </div>
     </form>
     <p class="mt-6 text-center text-sm text-gray-400">
@@ -88,6 +91,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Lógica para alternar os campos de quantidade/valor
     const buyTypeRadios = document.querySelectorAll('input[name="buy_type"]');
     const quantityFieldGroup = document.getElementById('quantity_field_group');
     const quoteQuantityFieldGroup = document.getElementById('quote_quantity_field_group');
@@ -110,8 +114,18 @@ document.addEventListener('DOMContentLoaded', function() {
     buyTypeRadios.forEach(radio => {
         radio.addEventListener('change', toggleFields);
     });
-
     toggleFields();
+
+    // Lógica do Spinner
+    const form = document.getElementById('marketBuyForm');
+    form.addEventListener('submit', function(event) {
+        const submitButton = form.querySelector('button[type="submit"]');
+        const buttonText = submitButton.querySelector('.btn-text');
+        
+        submitButton.classList.add('loading');
+        submitButton.disabled = true;
+        buttonText.textContent = 'Processando...';
+    });
 });
 </script>
 

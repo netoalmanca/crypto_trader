@@ -69,7 +69,10 @@
             
             <div class="pt-4 flex justify-end">
                 <a href="{% url 'core:dashboard' %}" class="py-2 px-4 mr-4 rounded-lg text-white hover:bg-gray-700">Cancelar</a>
-                <button type="submit" class="btn-primary bg-red-600 hover:bg-red-500 focus:ring-red-500">Criar Ordem de Venda</button>
+                <button type="submit" class="btn-primary bg-red-600 hover:bg-red-500 focus:ring-red-500">
+                    <div class="spinner"></div>
+                    <span class="btn-text">Criar Ordem de Venda</span>
+                </button>
             </div>
         </form>
     {% endif %}
@@ -82,6 +85,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('limit-sell-form');
     if (form) {
+        // Lógica para alternar os campos
         const orderTypeRadios = form.elements.order_type;
         const quantityGroup = document.getElementById('quantity-input-group');
         const totalValueGroup = document.getElementById('total-value-input-group');
@@ -103,6 +107,16 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             toggleInputs();
         }
+        
+        // Lógica do Spinner
+        form.addEventListener('submit', function(event) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            const buttonText = submitButton.querySelector('.btn-text');
+            
+            submitButton.classList.add('loading');
+            submitButton.disabled = true;
+            buttonText.textContent = 'Enviando Ordem...';
+        });
     }
 });
 </script>

@@ -12,7 +12,7 @@
         <p class="mt-1" x-text="isTestnet ? 'As operações usarão a Testnet da Binance (sem fundos reais).' : 'As operações usarão sua conta REAL da Binance. Tenha certeza absoluta do que está fazendo.'"></p>
     </div>
 
-    <form method="post" novalidate>
+    <form method="post" novalidate id="apiKeysForm">
         {% csrf_token %}
         <div class="space-y-6">
             <div>
@@ -39,7 +39,10 @@
             </div>
         </div>
         <div class="mt-8">
-            <button type="submit" class="btn-primary w-full">Salvar Configurações</button>
+            <button type="submit" class="btn-primary w-full">
+                <div class="spinner"></div>
+                <span class="btn-text">Salvar Configurações</span>
+            </button>
         </div>
     </form>
     
@@ -48,19 +51,47 @@
         <h3 class="text-lg font-semibold text-red-400">Zona de Perigo</h3>
         <p class="mt-1 text-sm text-gray-400">Use as ações abaixo se notar inconsistências nos seus dados de portfólio.</p>
         <div class="mt-4 space-y-4">
-            <!-- NOVO BOTÃO -->
             <a href="{% url 'core:recalculate_holdings' %}" 
                class="btn-primary w-full bg-orange-700 hover:bg-orange-600"
-               onclick="return confirm('Isso irá apagar e reconstruir suas posses locais a partir do seu histórico de transações. É útil para corrigir saldos incorretos. Deseja continuar?')">
-                Recalcular Portfólio
+               onclick="return confirmAndLoad(this, 'Isso irá apagar e reconstruir suas posses locais a partir do seu histórico de transações. É útil para corrigir saldos incorretos. Deseja continuar?')">
+                <div class="spinner"></div>
+                <span class="btn-text">Recalcular Portfólio</span>
             </a>
             <a href="{% url 'core:reset_portfolio' %}" 
                class="btn-primary w-full bg-red-800 hover:bg-red-700"
-               onclick="return confirm('ATENÇÃO!\\n\\nIsso apagará TODAS as suas transações e posses salvas neste aplicativo. Seus fundos na Binance NÃO serão afetados.\\n\\nEsta ação não pode ser desfeita. Deseja continuar?')">
-                Zerar TODOS os Dados Locais
+               onclick="return confirmAndLoad(this, 'ATENÇÃO!\\n\\nIsso apagará TODAS as suas transações e posses salvas neste aplicativo. Seus fundos na Binance NÃO serão afetados.\\n\\nEsta ação não pode ser desfeita. Deseja continuar?')">
+                <div class="spinner"></div>
+                <span class="btn-text">Zerar TODOS os Dados Locais</span>
             </a>
         </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Spinner para o formulário principal
+    const form = document.getElementById('apiKeysForm');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const submitButton = form.querySelector('button[type="submit"]');
+            const buttonText = submitButton.querySelector('.btn-text');
+            submitButton.classList.add('loading');
+            submitButton.disabled = true;
+            if (buttonText) buttonText.textContent = 'Salvando...';
+        });
+    }
+});
+
+// Função reutilizável para botões de âncora na Zona de Perigo
+function confirmAndLoad(element, message) {
+    if (confirm(message)) {
+        const buttonText = element.querySelector('.btn-text');
+        element.classList.add('loading');
+        element.style.pointerEvents = 'none'; // Desabilita o link
+        if (buttonText) buttonText.textContent = 'Processando...';
+        return true; // Permite que o link seja seguido
+    }
+    return false; // Impede a navegação se o usuário cancelar
+}
+</script>
 {% endblock %}

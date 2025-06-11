@@ -82,7 +82,10 @@
             {% endif %}
             
             <div class="mt-6 sm:mt-8">
-                <button type="submit" class="btn-primary w-full bg-red-600 hover:bg-red-700 focus:ring-red-500">Executar Venda a Mercado</button>
+                <button type="submit" class="btn-primary w-full bg-red-600 hover:bg-red-700 focus:ring-red-500">
+                    <div class="spinner"></div>
+                    <span class="btn-text">Executar Venda a Mercado</span>
+                </button>
             </div>
         </form>
     {% endif %}
@@ -93,31 +96,45 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Lógica para alternar os campos de quantidade/valor
     const sellTypeRadios = document.querySelectorAll('input[name="sell_type"]');
-    if (!sellTypeRadios.length) return;
+    if (sellTypeRadios.length > 0) {
+        const quantityFieldGroup = document.getElementById('quantity_field_group');
+        const quoteQuantityFieldGroup = document.getElementById('quote_quantity_field_group');
+        const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+        const quoteQuantityInput = document.getElementById('{{ form.quote_quantity_to_receive.id_for_label }}');
 
-    const quantityFieldGroup = document.getElementById('quantity_field_group');
-    const quoteQuantityFieldGroup = document.getElementById('quote_quantity_field_group');
-    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
-    const quoteQuantityInput = document.getElementById('{{ form.quote_quantity_to_receive.id_for_label }}');
-
-    function toggleSellFields() {
-        const selectedType = document.querySelector('input[name="sell_type"]:checked').value;
-        if (selectedType === 'QUANTITY') {
-            quantityFieldGroup.style.display = 'block';
-            quoteQuantityFieldGroup.style.display = 'none';
-            if (quoteQuantityInput) quoteQuantityInput.value = '';
-        } else { // QUOTE_RECEIVE
-            quantityFieldGroup.style.display = 'none';
-            quoteQuantityFieldGroup.style.display = 'block';
-            if (quantityInput) quantityInput.value = '';
+        function toggleSellFields() {
+            const selectedType = document.querySelector('input[name="sell_type"]:checked').value;
+            if (selectedType === 'QUANTITY') {
+                quantityFieldGroup.style.display = 'block';
+                quoteQuantityFieldGroup.style.display = 'none';
+                if (quoteQuantityInput) quoteQuantityInput.value = '';
+            } else { // QUOTE_RECEIVE
+                quantityFieldGroup.style.display = 'none';
+                quoteQuantityFieldGroup.style.display = 'block';
+                if (quantityInput) quantityInput.value = '';
+            }
         }
-    }
 
-    sellTypeRadios.forEach(radio => {
-        radio.addEventListener('change', toggleSellFields);
-    });
-    toggleSellFields();
+        sellTypeRadios.forEach(radio => {
+            radio.addEventListener('change', toggleSellFields);
+        });
+        toggleSellFields();
+    }
+    
+    // Lógica do Spinner
+    const form = document.getElementById('marketSellForm');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            const buttonText = submitButton.querySelector('.btn-text');
+            
+            submitButton.classList.add('loading');
+            submitButton.disabled = true;
+            buttonText.textContent = 'Processando...';
+        });
+    }
 });
 </script>
 

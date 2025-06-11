@@ -40,7 +40,9 @@
         }
         .form-input::placeholder { color: #6b7280; }
         .btn-primary {
-            display: inline-block;
+            display: inline-flex; /* Alterado para inline-flex para alinhar o spinner */
+            align-items: center;
+            justify-content: center;
             width: 100%;
             padding: 0.75rem;
             background-color: #0891b2; /* cyan-600 */
@@ -49,8 +51,32 @@
             text-align: center;
             border-radius: 0.5rem;
             transition: background-color 0.3s;
+            cursor: pointer;
         }
         .btn-primary:hover { background-color: #06b6d4; }
+        .btn-primary:disabled {
+            background-color: #4b5563; /* bg-gray-600 */
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        /* Estilos do Spinner */
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid #ffffff;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: none; /* Escondido por padrão */
+            margin-right: 0.5rem;
+        }
+        .btn-primary.loading .spinner {
+            display: inline-block; /* Mostra o spinner quando a classe 'loading' é adicionada */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-primary text-gray-300 font-sans">
