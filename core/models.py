@@ -79,7 +79,12 @@ class UserProfile(models.Model):
         verbose_name="Percentual de Venda (%)",
         help_text="Percentual da sua posse de uma cripto que o agente usará para cada ordem de venda."
     )
-
+    agent_confidence_threshold = models.DecimalField(
+        max_digits=3, decimal_places=2, default=Decimal('0.75'),
+        verbose_name="Limiar de Confiança do Agente",
+        help_text="O agente só executará ordens se a confiança da IA for maior ou igual a este valor (ex: 0.75 = 75%)."
+    )
+    
     @property
     def binance_api_key(self): return decrypt(self._binance_api_key)
     @binance_api_key.setter

@@ -1,18 +1,16 @@
 import pandas as pd
 import pandas_ta as ta
 import requests
+import time
+from decimal import Decimal
 from celery import shared_task
+from django.utils import timezone
 from django.conf import settings
 from binance.client import Client
 
-from core.models import Cryptocurrency
-from .models import TechnicalAnalysis, MarketSentiment
-
-from core.models import UserProfile, Holding
-from .services import get_gemini_trade_decision
-
-from .models import TradingSignal
-from .services import execute_trade_from_signal
+from core.models import Cryptocurrency, UserProfile, Holding
+from .models import TechnicalAnalysis, MarketSentiment, TradingSignal, BacktestReport
+from .services import get_gemini_trade_decision, execute_trade_from_signal
 
 @shared_task(name="trading_agent.tasks.run_trading_cycle_for_all_users")
 def run_trading_cycle_for_all_users():
@@ -146,3 +144,99 @@ def process_unexecuted_signals():
         execute_trade_from_signal(signal)
 
     return f"{signals_to_process.count()} sinais processados."
+
+@shared_task(name="trading_agent.tasks.run_backtest_task")
+def run_backtest_task(report_id):
+    """
+    Executa a simulação de backtesting em segundo plano e guarda os resultados.
+    """
+    try:
+        report = BacktestReport.objects.get(id=report_id)
+        report.status = 'RUNNING'
+        report.save()
+
+        user_profile = report.user_profile
+        crypto = Cryptocurrency.objects.get(symbol=report.symbol)
+
+        # 1. Obter dados históricos
+        client = Client()
+        klines = client.get_historical_klines(f"{crypto.symbol}{crypto.price_currency}", Client.KLINE_INTERVAL_1DAY, report.start_date)
+        if not klines:
+            raise ValueError(f"Não foram encontrados dados históricos para {crypto.symbol}.")
+
+        df = pd.DataFrame(klines, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+        df['time'] = pd.to_datetime(df['time'], unit='ms')
+        df['close'] = pd.to_numeric(df['close']).astype(str)
+        df.set_index('time', inplace=True)
+
+        # 2. Inicializar simulação
+        cash = report.initial_capital
+        crypto_holdings = Decimal('0.0')
+        avg_buy_price = Decimal('0.0')
+        trades = 0
+        
+        # 3. Loop de simulação
+        for index, row in df.iterrows():
+            if len(df.loc[:index]) < 50: continue
+
+            current_price = Decimal(row['close'])
+            past_data = df.loc[:index].copy()
+            past_data['close'] = pd.to_numeric(past_data['close'])
+
+            past_data.ta.rsi(length=14, append=True)
+            past_data.ta.macd(fast=12, slow=26, signal=9, append=True)
+            past_data.ta.bbands(length=20, std=2, append=True)
+            latest_indicators = past_data.iloc[-1]
+            
+            # Mock de dados para a decisão
+            mock_tech = type('MockTech', (), {'rsi': latest_indicators.get('RSI_14'), 'macd_line': latest_indicators.get('MACD_12_26_9'), 'macd_signal': latest_indicators.get('MACDs_12_26_9'), 'bollinger_high': latest_indicators.get('BBU_20_2.0'), 'bollinger_low': latest_indicators.get('BBL_20_2.0'), 'current_price': current_price})()
+            mock_sentiment = type('MockSentiment', (), {'sentiment_score': 0.5, 'summary': 'Sentimento neutro para simulação.'})()
+            mock_holding = type('MockHolding', (), {'quantity': crypto_holdings, 'average_buy_price': avg_buy_price})()
+
+            ai_decision_data = get_gemini_trade_decision(
+                user_profile, crypto, mock_tech, mock_sentiment, mock_holding, save_signal=False
+            )
+            time.sleep(2) 
+
+            if not ai_decision_data: continue
+
+            decision = ai_decision_data.get('decision')
+            confidence = ai_decision_data.get('confidence_score')
+
+            if decision == 'BUY' and confidence >= user_profile.agent_confidence_threshold and cash > 10:
+                buy_amount = cash * (user_profile.agent_buy_risk_percentage / Decimal('100.0'))
+                crypto_bought = buy_amount / current_price
+                total_cost = (avg_buy_price * crypto_holdings) + buy_amount
+                crypto_holdings += crypto_bought
+                avg_buy_price = total_cost / crypto_holdings
+                cash -= buy_amount
+                trades += 1
+
+            elif decision == 'SELL' and confidence >= user_profile.agent_confidence_threshold and crypto_holdings > 0:
+                sell_amount = crypto_holdings * (user_profile.agent_sell_risk_percentage / Decimal('100.0'))
+                cash += sell_amount * current_price
+                crypto_holdings -= sell_amount
+                if crypto_holdings < Decimal('0.00000001'):
+                    avg_buy_price = Decimal('0.0')
+                trades += 1
+
+        # 4. Guardar resultados
+        final_price = Decimal(df.iloc[-1]['close'])
+        report.final_value = cash + crypto_holdings * final_price
+        profit_loss = report.final_value - report.initial_capital
+        report.profit_loss_percent = (profit_loss / report.initial_capital) * 100
+
+        buy_and_hold_value = (report.initial_capital / Decimal(df.iloc[0]['close'])) * final_price
+        buy_and_hold_pl = buy_and_hold_value - report.initial_capital
+        report.buy_and_hold_profit_loss_percent = (buy_and_hold_pl / report.initial_capital) * 100
+        
+        report.total_trades = trades
+        report.status = 'COMPLETED'
+
+    except Exception as e:
+        report.status = 'FAILED'
+        report.error_message = str(e)
+    
+    report.completed_at = timezone.now()
+    report.save()
+    return f"Backtest {report_id} concluído com status {report.status}."

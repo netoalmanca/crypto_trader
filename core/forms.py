@@ -47,12 +47,20 @@ class UserProfileAPIForm(forms.ModelForm):
         widget=forms.NumberInput(attrs={'class': 'form-input', 'step': '1.0'})
     )
     
+    agent_confidence_threshold = forms.DecimalField(
+        label=_("Limiar de Confiança do Agente (0.0 a 1.0)"),
+        min_value=Decimal('0.0'),
+        max_value=Decimal('1.0'),
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'step': '0.05'})
+    )
+    
     class Meta:
         model = UserProfile
         fields = [
             'binance_api_key', 'binance_api_secret', 'preferred_fiat_currency', 
             'use_testnet', 'enable_auto_trading', 
-            'agent_buy_risk_percentage', 'agent_sell_risk_percentage'
+            'agent_buy_risk_percentage', 'agent_sell_risk_percentage',
+            'agent_confidence_threshold'
         ]
 
     def __init__(self, *args, **kwargs):

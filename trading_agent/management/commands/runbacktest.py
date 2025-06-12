@@ -126,7 +126,7 @@ class Command(BaseCommand):
                 trades.append({'date': index, 'type': 'BUY', 'price': current_price, 'amount': crypto_bought})
                 self.stdout.write(f"{index.date()}: COMPRA de {crypto_bought:.6f} {symbol} a ${current_price:.2f}")
 
-            elif decision == 'SELL' and confidence > 0.7 and crypto_holdings > 0:
+            elif decision == 'SELL' and confidence > 0.4 and crypto_holdings > 0:
                 sell_amount = crypto_holdings * (user_profile.agent_sell_risk_percentage / Decimal('100.0'))
                 cash += sell_amount * current_price
                 crypto_holdings -= sell_amount

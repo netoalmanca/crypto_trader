@@ -1,18 +1,18 @@
 # trading_agent/views.py
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from .models import TradingSignal
-from core.models import Transaction, Cryptocurrency
+from django.contrib import messages
+from .models import TradingSignal, BacktestReport
+from .forms import BacktestForm
+from .tasks import run_backtest_task
+from core.models import Transaction
 from decimal import Decimal
 
 @login_required
 def agent_dashboard_view(request):
-    """
-    Esta view busca e organiza todos os dados necessários para exibir
-    no dashboard do Agente de IA.
-    """
+    # ... (código existente inalterado) ...
     user_profile = request.user.profile
     signals_list = TradingSignal.objects.filter(user_profile=user_profile).order_by('-timestamp')
     
@@ -42,21 +42,12 @@ def agent_dashboard_view(request):
     }
     return render(request, 'trading_agent/agent_dashboard.html', context)
 
+
 @login_required
 def agent_reports_view(request):
-    """
-    Calcula e exibe as métricas de performance para as operações
-    executadas pelo Agente de IA.
-    """
+    # ... (código existente inalterado) ...
     user_profile = request.user.profile
-    
-    # Filtra transações que foram originadas por um sinal de IA executado
-    agent_transactions = Transaction.objects.filter(
-        user_profile=user_profile,
-        signal__is_executed=True
-    ).order_by('cryptocurrency', 'transaction_date')
-
-    # Dicionário para armazenar o resultado por cripto
+    agent_transactions = Transaction.objects.filter(user_profile=user_profile, signal__is_executed=True).order_by('cryptocurrency', 'transaction_date')
     performance_by_crypto = {}
 
     for tx in agent_transactions:
@@ -78,7 +69,6 @@ def agent_reports_view(request):
             performance_by_crypto[symbol]['total_revenue'] += tx.total_value
             performance_by_crypto[symbol]['total_qty_sold'] += tx.quantity_crypto
 
-    # Pós-processamento para calcular P/L e Win Rate
     total_profit_loss = Decimal('0.0')
     total_trades = 0
     total_wins = 0
@@ -88,7 +78,6 @@ def agent_reports_view(request):
         data['profit_loss'] = profit_loss
         total_profit_loss += profit_loss
         
-        # Simplificação de Win Rate: considera o P/L geral por ativo
         if profit_loss > 0:
             data['is_win'] = True
             total_wins +=1
@@ -106,3 +95,34 @@ def agent_reports_view(request):
         'total_trades': total_trades,
     }
     return render(request, 'trading_agent/agent_reports.html', context)
+
+
+@login_required
+def backtest_view(request):
+    """
+    Controla a página de backtesting, lidando com a submissão do formulário
+    e a listagem de relatórios passados.
+    """
+    form = BacktestForm(request.POST or None)
+    if request.method == 'POST':
+        if form.is_valid():
+            # Cria um novo registo para o relatório de backtest
+            report = BacktestReport.objects.create(
+                user_profile=request.user.profile,
+                symbol=form.cleaned_data['symbol'].symbol,
+                start_date=form.cleaned_data['start_date'],
+                initial_capital=form.cleaned_data['initial_capital']
+            )
+            # Inicia a tarefa Celery em segundo plano
+            run_backtest_task.delay(report.id)
+            messages.success(request, f"Simulação para {report.symbol} iniciada. O relatório aparecerá abaixo quando concluído.")
+            return redirect('trading_agent:backtest')
+
+    # Busca todos os relatórios existentes para o utilizador
+    reports = BacktestReport.objects.filter(user_profile=request.user.profile)
+    context = {
+        'page_title': 'Backtesting de Estratégia',
+        'form': form,
+        'reports': reports
+    }
+    return render(request, 'trading_agent/backtest.html', context)
