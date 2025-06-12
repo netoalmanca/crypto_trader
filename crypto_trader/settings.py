@@ -23,7 +23,7 @@ INSTALLED_APPS = [
     'django.contrib.messages', 'django.contrib.staticfiles',
     'django.contrib.humanize', 'core.apps.CoreConfig',
     'trading_agent.apps.TradingAgentConfig',
-    'django_celery_beat', # (NOVO) Adicionar para o agendador do Celery
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -77,45 +77,38 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 LOGIN_URL, LOGIN_REDIRECT_URL, LOGOUT_REDIRECT_URL = 'core:login', 'core:dashboard', 'core:index'
 
 # --- Celery Settings ---
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+# (CORRIGIDO) Aponta para 'localhost' em vez de 'redis' para desenvolvimento local.
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_POOL_LIMIT = 0 
 CELERY_ACCEPT_CONTENT, CELERY_TASK_SERIALIZER, CELERY_RESULT_SERIALIZER = ['json'], 'json', 'json'
 CELERY_TIMEZONE, CELERY_TASK_TRACK_STARTED, CELERY_TASK_TIME_LIMIT = TIME_ZONE, True, 3600
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # --- Celery Beat Schedule ---
-# (FREQUÊNCIA AJUSTADA)
 CELERY_BEAT_SCHEDULE = {
-    # Tarefas de atualização de dados de mercado (mantidas a cada minuto)
     'update-crypto-prices-every-minute': {
         'task': 'core.tasks.update_all_cryptocurrency_prices', 'schedule': 60.0, },
     'update-exchange-rates-every-minute': {
         'task': 'core.tasks.update_exchange_rates', 'schedule': 60.0, },
     'create-daily-snapshots': {
         'task': 'core.tasks.create_daily_portfolio_snapshots', 'schedule': crontab(hour=23, minute=55), },
-
-    # Tarefas de Análise do Agente (frequência aumentada)
     'calculate-indicators-every-hour': {
         'task': 'trading_agent.tasks.calculate_technical_indicators_for_all_cryptos',
-        'schedule': crontab(minute=0, hour='*'), # Roda no início de cada hora
+        'schedule': crontab(minute=0, hour='*'), 
     },
     'analyze-sentiment-every-hour': {
         'task': 'trading_agent.tasks.analyze_market_sentiment_for_all_cryptos',
-        'schedule': crontab(minute=5, hour='*'), # Roda 5 minutos depois da análise técnica
+        'schedule': crontab(minute=5, hour='*'), 
     },
-    
-    # Tarefas de Decisão e Execução (frequência aumentada)
     'run-trading-cycle-every-15-minutes': {
         'task': 'trading_agent.tasks.run_trading_cycle_for_all_users',
-        'schedule': crontab(minute='*/15'), # Roda a cada 15 minutos
+        'schedule': crontab(minute='*/15'), 
     },
     'process-signals-every-15-minutes': {
         'task': 'trading_agent.tasks.process_unexecuted_signals',
-        'schedule': crontab(minute='1,16,31,46'), # Roda 1 minuto depois do ciclo de decisão
+        'schedule': crontab(minute='1,16,31,46'),
     },
-    
-    # Tarefa de Aprendizagem (mantida semanalmente)
     'reflect-on-performance-weekly': {
         'task': 'trading_agent.tasks.reflect_on_performance',
         'schedule': crontab(day_of_week='sunday', hour=2, minute=0),

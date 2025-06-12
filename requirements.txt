@@ -8,4 +8,4 @@ requests>=2.28.0,<3.0.0
 pandas-ta
 numpy==1.26.4
 newsapi-python>=0.2.7
-django-celery-beat
+django-celery-beat>=2.5.0
