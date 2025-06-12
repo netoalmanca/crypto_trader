@@ -1,3 +1,4 @@
+# trading_agent/tasks.py
 import pandas as pd
 import pandas_ta as ta
 import requests
@@ -12,51 +13,9 @@ from core.models import Cryptocurrency, UserProfile, Holding
 from .models import TechnicalAnalysis, MarketSentiment, TradingSignal, BacktestReport
 from .services import get_gemini_trade_decision, execute_trade_from_signal
 
-@shared_task(name="trading_agent.tasks.run_trading_cycle_for_all_users")
-def run_trading_cycle_for_all_users():
-    """
-    Tarefa principal que roda periodicamente para gerar sinais de trading para
-    todos os usuários que ativaram o agente.
-    """
-    active_profiles = UserProfile.objects.filter(enable_auto_trading=True)
-    if not active_profiles:
-        return "Nenhum usuário com trading automático ativado."
-
-    print(f"Iniciando ciclo de decisão para {active_profiles.count()} usuário(s).")
-
-    # Para este exemplo, vamos focar em apenas uma cripto (BTC)
-    # Em um sistema real, você faria um loop ou selecionaria os ativos mais relevantes
-    try:
-        crypto_to_trade = Cryptocurrency.objects.get(symbol='BTC')
-    except Cryptocurrency.DoesNotExist:
-        return "BTC não encontrado no banco de dados. Ciclo encerrado."
-
-    # Pega as análises mais recentes
-    latest_tech_analysis = TechnicalAnalysis.objects.filter(cryptocurrency=crypto_to_trade).order_by('-timestamp').first()
-    latest_sentiment = MarketSentiment.objects.filter(cryptocurrency=crypto_to_trade).order_by('-timestamp').first()
-
-    if not latest_tech_analysis or not latest_sentiment:
-        return "Dados de análise técnica ou sentimento não estão disponíveis para o BTC."
-
-    for profile in active_profiles:
-        current_holding = Holding.objects.filter(user_profile=profile, cryptocurrency=crypto_to_trade).first()
-
-        print(f"Gerando sinal para o usuário: {profile.user.username}")
-
-        # Chama o serviço para obter a decisão da IA
-        get_gemini_trade_decision(
-            profile=profile,
-            crypto=crypto_to_trade,
-            tech_data=latest_tech_analysis,
-            sentiment_data=latest_sentiment,
-            holding_data=current_holding
-        )
-    return f"Ciclo de decisão concluído para {active_profiles.count()} usuário(s)."
-
 @shared_task(name="trading_agent.tasks.calculate_technical_indicators_for_all_cryptos")
 def calculate_technical_indicators_for_all_cryptos():
-    """Calcula e salva indicadores técnicos para todas as criptomoedas no banco."""
-    client = Client() # Cliente público para dados de mercado
+    client = Client()
     for crypto in Cryptocurrency.objects.all():
         try:
             klines = client.get_klines(symbol=f"{crypto.symbol}{crypto.price_currency}", interval=Client.KLINE_INTERVAL_1DAY, limit=200)
@@ -65,7 +24,6 @@ def calculate_technical_indicators_for_all_cryptos():
             df = pd.DataFrame(klines, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
             df['close'] = pd.to_numeric(df['close'])
             
-            # Usando pandas-ta para calcular indicadores
             df.ta.rsi(length=14, append=True)
             df.ta.macd(fast=12, slow=26, signal=9, append=True)
             df.ta.bbands(length=20, std=2, append=True)
@@ -84,13 +42,9 @@ def calculate_technical_indicators_for_all_cryptos():
             print(f"Erro ao calcular indicadores para {crypto.symbol}: {e}")
     return "Análises técnicas concluídas."
 
-
 @shared_task(name="trading_agent.tasks.analyze_market_sentiment_for_all_cryptos")
 def analyze_market_sentiment_for_all_cryptos():
-    """Busca notícias e usa a IA para analisar o sentimento de cada criptomoeda."""
-    for crypto in Cryptocurrency.objects.filter(symbol__in=['BTC', 'ETH']): # Exemplo: rodar apenas para BTC e ETH
-        # NOTA: Integre uma API de notícias real aqui (ex: NewsAPI, Bing News)
-        # Para este exemplo, usaremos dados mockados.
+    for crypto in Cryptocurrency.objects.filter(symbol__in=['BTC', 'ETH']):
         headlines = f"Notícias sobre {crypto.name}: Investidores otimistas, mas reguladores trazem cautela."
         
         prompt = f"""
@@ -101,11 +55,6 @@ def analyze_market_sentiment_for_all_cryptos():
         """
         
         try:
-            # Reutilize a lógica de chamada da API Gemini de `core/views.py`
-            # Esta função `call_gemini_api` precisaria ser criada em um módulo de serviços.
-            # ai_json_response = call_gemini_api(prompt) 
-            
-            # Resposta mockada para o exemplo:
             ai_json_response = {'sentiment_score': 0.65, 'summary': 'O sentimento é majoritariamente positivo devido ao otimismo dos investidores, embora a incerteza regulatória represente um risco.'}
 
             MarketSentiment.objects.create(
@@ -118,32 +67,72 @@ def analyze_market_sentiment_for_all_cryptos():
             print(f"Erro ao analisar sentimento para {crypto.symbol}: {e}")
     return "Análises de sentimento concluídas."
 
+@shared_task(name="trading_agent.tasks.run_trading_cycle_for_all_users")
+def run_trading_cycle_for_all_users():
+    active_profiles = UserProfile.objects.filter(enable_auto_trading=True)
+    if not active_profiles:
+        return "Nenhum usuário com trading automático ativado."
+
+    print(f"Iniciando ciclo de decisão para {active_profiles.count()} usuário(s).")
+    
+    try:
+        crypto_to_trade = Cryptocurrency.objects.get(symbol='BTC')
+    except Cryptocurrency.DoesNotExist:
+        return "BTC não encontrado no banco de dados. Ciclo encerrado."
+
+    latest_tech_analysis = TechnicalAnalysis.objects.filter(cryptocurrency=crypto_to_trade).order_by('-timestamp').first()
+    latest_sentiment = MarketSentiment.objects.filter(cryptocurrency=crypto_to_trade).order_by('-timestamp').first()
+
+    if not latest_tech_analysis or not latest_sentiment:
+        return "Dados de análise técnica ou sentimento não estão disponíveis para o BTC."
+
+    for profile in active_profiles:
+        current_holding = Holding.objects.filter(user_profile=profile, cryptocurrency=crypto_to_trade).first()
+        
+        print(f"Gerando sinal para o usuário: {profile.user.username}")
+        
+        get_gemini_trade_decision(
+            profile=profile,
+            crypto=crypto_to_trade,
+            tech_data=latest_tech_analysis,
+            sentiment_data=latest_sentiment,
+            holding_data=current_holding
+        )
+    return f"Ciclo de decisão concluído para {active_profiles.count()} usuário(s)."
+
 @shared_task(name="trading_agent.tasks.process_unexecuted_signals")
 def process_unexecuted_signals():
     """
     Busca por sinais de trade não executados que atendam ao critério de confiança
     e os envia para execução.
     """
-    # Limiar de confiança importado do settings
-    confidence_threshold = settings.AGENT_CONFIDENCE_THRESHOLD
-
-    # Busca todos os sinais de COMPRA ou VENDA não executados com confiança suficiente
+    # (ATUALIZADO) Busca sinais e verifica o limiar de cada utilizador individualmente
     signals_to_process = TradingSignal.objects.filter(
         is_executed=False,
-        decision__in=['BUY', 'SELL'],
-        confidence_score__gte=confidence_threshold
+        decision__in=['BUY', 'SELL']
     ).select_related('user_profile', 'cryptocurrency')
 
     if not signals_to_process:
-        return "Nenhum novo sinal de alta confiança para executar."
-
-    print(f"Encontrados {signals_to_process.count()} sinais de alta confiança para processar.")
-
+        return "Nenhum novo sinal de COMPRA/VENDA para processar."
+    
+    executable_signals = []
     for signal in signals_to_process:
+        # Pega o limiar do perfil do utilizador associado ao sinal
+        confidence_threshold = signal.user_profile.agent_confidence_threshold
+        if signal.confidence_score >= confidence_threshold:
+            executable_signals.append(signal)
+
+    if not executable_signals:
+        return "Nenhum sinal de alta confiança para executar."
+
+    print(f"Encontrados {len(executable_signals)} sinais de alta confiança para processar.")
+
+    for signal in executable_signals:
         print(f"Processando sinal {signal.id} ({signal.decision} {signal.cryptocurrency.symbol}) para {signal.user_profile.user.username}")
         execute_trade_from_signal(signal)
+            
+    return f"{len(executable_signals)} sinais processados."
 
-    return f"{signals_to_process.count()} sinais processados."
 
 @shared_task(name="trading_agent.tasks.run_backtest_task")
 def run_backtest_task(report_id):
@@ -188,7 +177,6 @@ def run_backtest_task(report_id):
             past_data.ta.bbands(length=20, std=2, append=True)
             latest_indicators = past_data.iloc[-1]
             
-            # Mock de dados para a decisão
             mock_tech = type('MockTech', (), {'rsi': latest_indicators.get('RSI_14'), 'macd_line': latest_indicators.get('MACD_12_26_9'), 'macd_signal': latest_indicators.get('MACDs_12_26_9'), 'bollinger_high': latest_indicators.get('BBU_20_2.0'), 'bollinger_low': latest_indicators.get('BBL_20_2.0'), 'current_price': current_price})()
             mock_sentiment = type('MockSentiment', (), {'sentiment_score': 0.5, 'summary': 'Sentimento neutro para simulação.'})()
             mock_holding = type('MockHolding', (), {'quantity': crypto_holdings, 'average_buy_price': avg_buy_price})()

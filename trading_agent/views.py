@@ -1,9 +1,10 @@
 # trading_agent/views.py
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.contrib import messages
+from django.http import JsonResponse
 from .models import TradingSignal, BacktestReport
 from .forms import BacktestForm
 from .tasks import run_backtest_task
@@ -12,7 +13,6 @@ from decimal import Decimal
 
 @login_required
 def agent_dashboard_view(request):
-    # ... (código existente inalterado) ...
     user_profile = request.user.profile
     signals_list = TradingSignal.objects.filter(user_profile=user_profile).order_by('-timestamp')
     
@@ -45,7 +45,6 @@ def agent_dashboard_view(request):
 
 @login_required
 def agent_reports_view(request):
-    # ... (código existente inalterado) ...
     user_profile = request.user.profile
     agent_transactions = Transaction.objects.filter(user_profile=user_profile, signal__is_executed=True).order_by('cryptocurrency', 'transaction_date')
     performance_by_crypto = {}
@@ -56,18 +55,12 @@ def agent_reports_view(request):
             performance_by_crypto[symbol] = {
                 'total_cost': Decimal('0.0'),
                 'total_revenue': Decimal('0.0'),
-                'total_qty_bought': Decimal('0.0'),
-                'total_qty_sold': Decimal('0.0'),
-                'win_trades': 0,
-                'loss_trades': 0,
             }
 
         if tx.transaction_type == 'BUY':
             performance_by_crypto[symbol]['total_cost'] += tx.total_value
-            performance_by_crypto[symbol]['total_qty_bought'] += tx.quantity_crypto
         elif tx.transaction_type == 'SELL':
             performance_by_crypto[symbol]['total_revenue'] += tx.total_value
-            performance_by_crypto[symbol]['total_qty_sold'] += tx.quantity_crypto
 
     total_profit_loss = Decimal('0.0')
     total_trades = 0
@@ -99,26 +92,19 @@ def agent_reports_view(request):
 
 @login_required
 def backtest_view(request):
-    """
-    Controla a página de backtesting, lidando com a submissão do formulário
-    e a listagem de relatórios passados.
-    """
     form = BacktestForm(request.POST or None)
     if request.method == 'POST':
         if form.is_valid():
-            # Cria um novo registo para o relatório de backtest
             report = BacktestReport.objects.create(
                 user_profile=request.user.profile,
                 symbol=form.cleaned_data['symbol'].symbol,
                 start_date=form.cleaned_data['start_date'],
                 initial_capital=form.cleaned_data['initial_capital']
             )
-            # Inicia a tarefa Celery em segundo plano
             run_backtest_task.delay(report.id)
             messages.success(request, f"Simulação para {report.symbol} iniciada. O relatório aparecerá abaixo quando concluído.")
             return redirect('trading_agent:backtest')
 
-    # Busca todos os relatórios existentes para o utilizador
     reports = BacktestReport.objects.filter(user_profile=request.user.profile)
     context = {
         'page_title': 'Backtesting de Estratégia',
@@ -126,3 +112,16 @@ def backtest_view(request):
         'reports': reports
     }
     return render(request, 'trading_agent/backtest.html', context)
+
+@login_required
+def backtest_status_view(request, report_id):
+    """
+    View de API que retorna o estado de um relatório de backtest específico.
+    """
+    try:
+        # Garante que um utilizador só pode verificar os seus próprios relatórios.
+        report = BacktestReport.objects.get(id=report_id, user_profile=request.user.profile)
+        return JsonResponse({'status': report.status})
+    except BacktestReport.DoesNotExist:
+        return JsonResponse({'status': 'NOT_FOUND'}, status=404)
+

@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 from celery.schedules import crontab
-from decimal import Decimal
+from decimal import Decimal # (Adicionado) Importar Decimal
 
 load_dotenv(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
 
@@ -27,7 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'core.apps.CoreConfig',
-    'trading_agent.apps.TradingAgentConfig',
+    'trading_agent.apps.TradingAgentConfig', # Adicionado anteriormente
 ]
 
 MIDDLEWARE = [
@@ -89,7 +89,6 @@ BINANCE_API_KEY = os.environ.get('BINANCE_API_KEY')
 BINANCE_API_SECRET = os.environ.get('BINANCE_API_SECRET')
 BINANCE_TESTNET_STR = os.environ.get('BINANCE_TESTNET', 'False')
 BINANCE_TESTNET = BINANCE_TESTNET_STR.lower() in ['true', '1', 't']
-# Carrega a chave da API do Gemini
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 
@@ -100,12 +99,25 @@ LOGOUT_REDIRECT_URL = 'core:index'
 # --- Configurações do Celery ---
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 43200,  # 12 horas
+    'health_check_interval': 30, # Verifica a conexão a cada 30 segundos
+}
+
+# (ATUALIZADO) Desabilita o pool de conexões do broker para o PRODUCER (Django).
+# Isto força uma nova conexão a cada tarefa enviada a partir da aplicação web,
+# evitando o erro "Connection reset by peer" com conexões inativas.
+# O worker do Celery ainda usará o seu próprio pool interno de forma eficiente.
+CELERY_BROKER_POOL_LIMIT = 0 
+
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_TASK_TIME_LIMIT = 3600 # Aumentado para 1 hora para backtests longos
 
 # --- Configurações do Celery Beat (Agendador) ---
 CELERY_BEAT_SCHEDULE = {
@@ -119,36 +131,26 @@ CELERY_BEAT_SCHEDULE = {
     },
     'create-daily-snapshots': {
         'task': 'core.tasks.create_daily_portfolio_snapshots',
-        'schedule': crontab(hour=23, minute=55), # Roda todo dia às 23:55
+        'schedule': crontab(hour=23, minute=55),
     },
-    # NOVAS TAREFAS DO AGENTE
     'calculate-indicators-every-4-hours': {
         'task': 'trading_agent.tasks.calculate_technical_indicators_for_all_cryptos',
-        'schedule': crontab(minute=0, hour='*/4'), # Roda a cada 4 horas
+        'schedule': crontab(minute=0, hour='*/4'),
     },
     'analyze-sentiment-every-4-hours': {
         'task': 'trading_agent.tasks.analyze_market_sentiment_for_all_cryptos',
-        'schedule': crontab(minute=15, hour='*/4'), # Roda 15 mins depois dos indicadores
+        'schedule': crontab(minute=15, hour='*/4'),
     },
-     'run-trading-cycle-every-hour': {
+    'run-trading-cycle-every-hour': {
         'task': 'trading_agent.tasks.run_trading_cycle_for_all_users',
-        'schedule': crontab(minute=30, hour='*'), # Roda toda hora, no minuto 30
-    },
-     'run-trading-cycle-every-hour': {
-        'task': 'trading_agent.tasks.run_trading_cycle_for_all_users',
-        'schedule': crontab(minute=30, hour='*'), # Roda toda hora, no minuto 30
+        'schedule': crontab(minute=30, hour='*'),
     },
     'process-signals-every-hour': {
         'task': 'trading_agent.tasks.process_unexecuted_signals',
-        'schedule': crontab(minute=35, hour='*'), # Roda 5 minutos depois do ciclo de decisão
+        'schedule': crontab(minute=35, hour='*'),
     },
 }
 
 # --- Configurações do Agente de Trading ---
-# Score de confiança mínimo para que um sinal seja considerado para execução.
-AGENT_CONFIDENCE_THRESHOLD = 0.75 
-# Percentual do saldo em 'quote currency' (ex: USDT) a ser usado em uma ordem de compra.
-AGENT_BUY_RISK_PERCENTAGE = Decimal('0.05') # 5%
-# Percentual da posse de uma cripto a ser vendido em uma ordem de venda.
-AGENT_SELL_RISK_PERCENTAGE = Decimal('1.0') # 100%
-
+AGENT_BUY_RISK_PERCENTAGE = Decimal('0.05')
+AGENT_SELL_RISK_PERCENTAGE = Decimal('1.0')

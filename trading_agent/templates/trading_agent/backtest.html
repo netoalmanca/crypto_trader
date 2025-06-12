@@ -57,7 +57,8 @@
                     </thead>
                     <tbody>
                         {% for report in reports %}
-                        <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                        <!-- (ATUALIZADO) Adiciona atributos de dados à linha da tabela -->
+                        <tr class="border-b border-gray-700 hover:bg-gray-700/50" data-report-id="{{ report.id }}" data-report-status="{{ report.status }}">
                             <td class="px-6 py-4 text-gray-400">{{ report.created_at|date:"d/m/Y H:i" }}</td>
                             <td class="px-6 py-4 font-semibold text-white">{{ report.symbol }}</td>
                             <td class="px-6 py-4 text-right">${{ report.initial_capital|intcomma }}</td>
@@ -89,4 +90,57 @@
         </div>
     </div>
 </div>
+
+<!-- (NOVO) Script para auto-refresh -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Encontra todas as linhas de relatório que estão com o estado 'RUNNING' ou 'PENDING'
+    const runningReports = document.querySelectorAll('[data-report-status="RUNNING"], [data-report-status="PENDING"]');
+
+    if (runningReports.length > 0) {
+        // Função que verifica o estado dos relatórios
+        const checkStatus = () => {
+            let stillRunning = false;
+            runningReports.forEach(row => {
+                const reportId = row.dataset.reportId;
+                if (!reportId || row.dataset.reportStatus === 'COMPLETED' || row.dataset.reportStatus === 'FAILED') {
+                    return; // Já terminou, não precisa de verificar mais
+                }
+
+                stillRunning = true; // Marca que ainda há pelo menos um a ser executado
+
+                // Chama a nossa nova API de estado
+                fetch(`/agent/backtest-status/${reportId}/`)
+                    .then(response => {
+                        if (!response.ok) { throw new Error('Network response was not ok'); }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Se o estado mudou de 'RUNNING' ou 'PENDING' para outra coisa, recarrega a página
+                        if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao verificar o estado do backtest:', error);
+                    });
+            });
+            
+            // Se não houver mais relatórios a serem executados, para o temporizador
+            if (!stillRunning) {
+                clearInterval(intervalId);
+            }
+        };
+
+        // Inicia o temporizador para verificar o estado a cada 5 segundos
+        const intervalId = setInterval(checkStatus, 5000); 
+
+        // Medida de segurança: para de verificar após 2 horas para evitar loops infinitos
+        setTimeout(() => {
+            clearInterval(intervalId);
+        }, 7200000); // 2 horas em milissegundos
+    }
+});
+</script>
+
 {% endblock %}
