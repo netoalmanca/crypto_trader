@@ -4,7 +4,7 @@ from django.utils import timezone
 from core.models import Cryptocurrency, UserProfile
 
 class TechnicalAnalysis(models.Model):
-    # ... (código existente inalterado) ...
+    """Armazena os indicadores técnicos calculados para uma criptomoeda em um dado momento."""
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='tech_analyses')
     timeframe = models.CharField(max_length=10, default='1d', help_text="Timeframe da análise (ex: 1h, 4h, 1d)")
     rsi = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -12,6 +12,7 @@ class TechnicalAnalysis(models.Model):
     macd_signal = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     bollinger_high = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     bollinger_low = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    atr = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True, help_text="Average True Range (volatilidade)")
     timestamp = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -21,7 +22,6 @@ class TechnicalAnalysis(models.Model):
         unique_together = ('cryptocurrency', 'timeframe', 'timestamp')
 
 class MarketSentiment(models.Model):
-    # ... (código existente inalterado) ...
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='sentiments')
     sentiment_score = models.DecimalField(max_digits=4, decimal_places=2, help_text="De -1.0 (muito negativo) a +1.0 (muito positivo)")
     summary = models.TextField(help_text="Resumo gerado pela IA sobre as notícias e o sentimento.")
@@ -34,7 +34,6 @@ class MarketSentiment(models.Model):
         ordering = ['-timestamp']
 
 class TradingSignal(models.Model):
-    # ... (código existente inalterado) ...
     DECISION_CHOICES = [('BUY', 'Comprar'), ('SELL', 'Vender'), ('HOLD', 'Manter')]
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='signals')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE)
@@ -51,7 +50,6 @@ class TradingSignal(models.Model):
         verbose_name_plural = "Sinais de Trading"
         ordering = ['-timestamp']
 
-# (NOVO) Modelo para armazenar os resultados do Backtest
 class BacktestReport(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pendente'),
@@ -63,15 +61,12 @@ class BacktestReport(models.Model):
     symbol = models.CharField(max_length=20)
     start_date = models.CharField(max_length=50)
     initial_capital = models.DecimalField(max_digits=20, decimal_places=2)
-    
-    # Campos para os resultados
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     final_value = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     profit_loss_percent = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     buy_and_hold_profit_loss_percent = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     total_trades = models.IntegerField(null=True, blank=True)
     error_message = models.TextField(blank=True, null=True)
-    
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -83,3 +78,22 @@ class BacktestReport(models.Model):
     def __str__(self):
         return f"Backtest para {self.symbol} de {self.user_profile.user.username} em {self.created_at.strftime('%Y-%m-%d')}"
 
+class StrategyLog(models.Model):
+    """
+    (NOVO) Armazena as reflexões e sugestões geradas pelo ciclo de aprendizagem da IA.
+    """
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='strategy_logs')
+    period_start_date = models.DateTimeField()
+    period_end_date = models.DateTimeField()
+    performance_summary = models.JSONField(help_text="JSON com métricas como P/L, win rate, etc.")
+    ai_reflection = models.TextField(help_text="Análise da IA sobre a performance no período.")
+    suggested_modifications = models.TextField(help_text="Sugestões concretas da IA para melhorar a estratégia.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Registo de Estratégia da IA"
+        verbose_name_plural = "Registos de Estratégia da IA"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Reflexão para {self.user_profile.user.username} - {self.created_at.strftime('%Y-%m-%d')}"

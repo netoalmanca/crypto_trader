@@ -7,168 +7,204 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ page_title|default:"CryptoTrader Pro" }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#1e293b',
-                        'secondary': '#334155',
-                        'accent': '#06b6d4',
+                        'primary': '#0f172a',    // slate-900
+                        'secondary': '#1e293b',  // slate-800
+                        'accent': '#06b6d4',      // cyan-500
+                        'light-text': '#94a3b8', // slate-400
+                        'dark-text': '#e2e8f0',   // slate-200
                     },
+                    transitionProperty: {
+                        'width': 'width',
+                        'margin': 'margin-left',
+                    }
                 }
             }
         }
     </script>
     <style>
+        /* Estilos de formulário e botões (sem alteração) */
         .form-input, select.form-input {
-            background-color: #374151; /* bg-gray-700 */
-            color: #d1d5db; /* text-gray-300 */
-            border-color: #4b5563; /* border-gray-600 */
-            width: 100%;
-            padding: 0.5rem 0.75rem;
-            border-radius: 0.5rem;
-            border-width: 1px;
-            transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+            background-color: #334155; color: #cbd5e1; border-color: #475569;
+            width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+            border-width: 1px; transition: all 0.3s;
         }
         .form-input:focus, select.form-input:focus {
-            outline: none;
-            border-color: #06b6d4; /* accent color */
+            outline: none; border-color: #06b6d4;
             box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.5);
         }
-        .form-input::placeholder { color: #6b7280; }
         .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            padding: 0.75rem;
-            background-color: #0891b2; /* cyan-600 */
-            color: white;
-            font-weight: 600;
-            text-align: center;
-            border-radius: 0.5rem;
-            transition: background-color 0.3s;
-            cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.6rem 1rem; background-color: #0891b2; color: white;
+            font-weight: 600; text-align: center; border-radius: 0.5rem;
+            transition: background-color 0.3s; cursor: pointer;
         }
         .btn-primary:hover { background-color: #06b6d4; }
-        .btn-primary:disabled {
-            background-color: #4b5563; /* bg-gray-600 */
-            cursor: not-allowed;
-            opacity: 0.7;
+        
+        /* (NOVO) Estilos para a Sidebar */
+        .sidebar {
+            transition: width 0.3s ease-in-out;
         }
-        .spinner {
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top: 2px solid #ffffff;
-            width: 16px;
-            height: 16px;
-            animation: spin 1s linear infinite;
-            display: none;
-            margin-right: 0.5rem;
+        .sidebar-link {
+            @apply flex items-center p-2 text-base font-normal rounded-lg;
+            @apply text-light-text hover:bg-gray-700 hover:text-dark-text;
+            transition: background-color 0.2s;
         }
-        .btn-primary.loading .spinner {
-            display: inline-block;
+        .sidebar-link.active {
+            @apply bg-accent text-white;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .sidebar-link .link-text {
+            transition: opacity 0.3s ease-in-out;
         }
-        /* Estilos do Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
+        .sidebar-link i.fa-fw {
+            transition: transform 0.3s ease-in-out;
         }
-        .modal-overlay.visible {
-            opacity: 1;
-            visibility: visible;
+        /* Estilo para sidebar colapsada */
+        .sidebar-collapsed .link-text {
+            @apply opacity-0 w-0;
         }
-        .modal-content {
-            background-color: #1e293b; /* primary */
-            padding: 1.5rem;
-            border-radius: 1rem;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            transform: scale(0.95);
-            transition: transform 0.3s;
+        .sidebar-collapsed .sidebar-title {
+            @apply hidden;
         }
-        .modal-overlay.visible .modal-content {
-            transform: scale(1);
+        .sidebar-collapsed .sidebar-link {
+            @apply justify-center;
+        }
+        .sidebar-collapsed .logo-text {
+            @apply hidden;
         }
     </style>
 </head>
-<body class="bg-primary text-gray-300 font-sans">
-    <nav class="bg-secondary shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="{% url 'core:index' %}" class="font-bold text-xl text-white">CryptoTrader Pro</a>
-                </div>
-                <div class="hidden md:flex items-center space-x-4">
-                    <a href="{% url 'core:index' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Início" %}</a>
-                    <a href="{% url 'core:cryptocurrency_list' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Criptomoedas" %}</a>
+<body class="bg-primary text-dark-text font-sans">
+    <div x-data="{ sidebarOpen: true }" @keydown.escape.window="sidebarOpen = false">
+        <!-- Sidebar -->
+        <aside class="sidebar fixed top-0 left-0 z-40 h-screen bg-secondary pt-4"
+               :class="{'w-64': sidebarOpen, 'w-20': !sidebarOpen}">
+            <div class="h-full px-3 pb-4 overflow-y-auto">
+                <!-- Logo -->
+                <a href="{% url 'core:index' %}" class="flex items-center pl-2.5 mb-5">
+                    <i class="fas fa-bolt-lightning text-accent text-2xl"></i>
+                    <span class="logo-text self-center text-xl font-semibold whitespace-nowrap ml-3" :class="{'hidden': !sidebarOpen}">CryptoTrader</span>
+                </a>
+
+                <ul id="nav-links" class="space-y-2">
                     {% if user.is_authenticated %}
-                        <a href="{% url 'core:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Dashboard" %}</a>
-                        <!-- (ADICIONADO) Link para o Dashboard do Agente -->
-                        <a href="{% url 'trading_agent:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Agente IA</a>
-                        <a href="{% url 'trading_agent:reports' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Relatórios IA</a>
-                        <a href="{% url 'trading_agent:backtest' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Backtesting " %}</a>
-                        <a href="{% url 'core:transaction_history' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Histórico" %}</a>
-                        <a href="{% url 'core:reports' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Relatórios" %}</a>
-        
-                    {% endif %}
-                    {% if user.is_staff %}
-                        <a href="/admin" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Admin" %}</a>
-                    {% endif %}
-                </div>
-                <div class="flex items-center">
-                    {% if user.is_authenticated %}
-                        <span class="text-white mr-4">{% trans "Olá" %}, {{ user.username }}!</span>
-                        <a href="{% url 'core:update_api_keys' %}" class="text-gray-400 hover:text-white transition" title="Configurações">
-                            <i class="fas fa-cog fa-lg"></i>
-                        </a>
-                        <a href="{% url 'core:logout' %}" class="bg-red-600 hover:bg-red-700 text-white ml-4 px-3 py-2 rounded-md text-sm font-medium">{% trans "Sair" %}</a>
+                        <li>
+                            <a href="{% url 'core:dashboard' %}" class="sidebar-link">
+                                <i class="fas fa-home fa-fw text-xl"></i>
+                                <span class="link-text ml-3">Dashboard</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'core:cryptocurrency_list' %}" class="sidebar-link">
+                                <i class="fa-brands fa-bitcoin fa-fw text-xl"></i>
+                                <span class="link-text ml-3">Criptomoedas</span>
+                            </a>
+                        </li>
+
+                        <li class="pt-4 pb-2">
+                            <span class="sidebar-title px-3 text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Agente IA</span>
+                        </li>
+                        <li><a href="{% url 'trading_agent:dashboard' %}" class="sidebar-link"><i class="fas fa-tachometer-alt fa-fw"></i><span class="link-text ml-3">Dashboard do Agente</span></a></li>
+                        <li><a href="{% url 'trading_agent:reports' %}" class="sidebar-link"><i class="fas fa-chart-line fa-fw"></i><span class="link-text ml-3">Relatórios de IA</span></a></li>
+                        <li><a href="{% url 'trading_agent:strategy_manager' %}" class="sidebar-link"><i class="fas fa-cogs fa-fw"></i><span class="link-text ml-3">Gestor de Estratégia</span></a></li>
+                        <li><a href="{% url 'trading_agent:backtest' %}" class="sidebar-link"><i class="fas fa-history fa-fw"></i><span class="link-text ml-3">Backtesting</span></a></li>
+                        
+                        <li class="pt-4 pb-2">
+                            <span class="sidebar-title px-3 text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Portfólio</span>
+                        </li>
+                        <li><a href="{% url 'core:reports' %}" class="sidebar-link"><i class="fas fa-chart-pie fa-fw"></i><span class="link-text ml-3">Relatório Geral</span></a></li>
+                        <li><a href="{% url 'core:transaction_history' %}" class="sidebar-link"><i class="fas fa-exchange-alt fa-fw"></i><span class="link-text ml-3">Histórico</span></a></li>
+                        <li><a href="{% url 'core:open_orders' %}" class="sidebar-link"><i class="fas fa-list-alt fa-fw"></i><span class="link-text ml-3">Ordens Abertas</span></a></li>
                     {% else %}
-                        <a href="{% url 'core:login' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Login" %}</a>
-                        <a href="{% url 'core:register' %}" class="bg-accent hover:bg-cyan-500 text-white ml-2 px-3 py-2 rounded-md text-sm font-medium">{% trans "Registrar" %}</a>
+                        <li><a href="{% url 'core:index' %}" class="sidebar-link"><i class="fas fa-home fa-fw"></i><span class="link-text ml-3">Início</span></a></li>
+                        <li><a href="{% url 'core:login' %}" class="sidebar-link"><i class="fas fa-sign-in-alt fa-fw"></i><span class="link-text ml-3">Login</span></a></li>
                     {% endif %}
-                </div>
+                </ul>
             </div>
+        </aside>
+
+        <div class="flex flex-col flex-1 transition-margin duration-300 ease-in-out" 
+             :class="{'md:ml-64': sidebarOpen, 'md:ml-20': !sidebarOpen}">
+            <!-- Top Bar -->
+            <header class="bg-secondary/50 backdrop-blur-sm sticky top-0 z-30">
+                <div class="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+                    <!-- Botão para colapsar/expandir sidebar -->
+                    <button @click="sidebarOpen = !sidebarOpen" class="hidden md:block p-2 rounded-md hover:bg-gray-700 text-light-text hover:text-dark-text">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <!-- Espaçador -->
+                    <div class="flex-1"></div>
+                    
+                    <!-- Menu do Utilizador -->
+                    <div class="flex items-center">
+                    {% if user.is_authenticated %}
+                         <div x-data="{ dropdownOpen: false }" class="relative ml-3">
+                            <button @click="dropdownOpen = !dropdownOpen" @click.away="dropdownOpen = false" class="max-w-xs bg-gray-700 rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white">
+                                <span class="sr-only">Open user menu</span>
+                                <div class="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-white font-bold">
+                                    {{ user.username|first|upper }}
+                                </div>
+                            </button>
+                            <div x-show="dropdownOpen" x-transition class="dropdown-menu">
+                                <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                                    <p class="text-sm text-gray-900 dark:text-white">Olá, {{ user.username }}</p>
+                                </div>
+                                <a href="{% url 'core:update_api_keys' %}" class="dropdown-item"><i class="fas fa-key fa-fw"></i>Configurações</a>
+                                {% if user.is_staff %}
+                                    <a href="/admin" class="dropdown-item"><i class="fas fa-user-shield fa-fw"></i>Admin</a>
+                                {% endif %}
+                                <a href="{% url 'core:logout' %}" class="dropdown-item"><i class="fas fa-sign-out-alt fa-fw"></i>Sair</a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{% url 'core:register' %}" class="btn-primary">Registrar</a>
+                    {% endif %}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Conteúdo Principal -->
+            <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {% if messages %}
+                    <div class="max-w-7xl mx-auto mb-6">
+                    {% for message in messages %}
+                        <div class="p-4 text-sm rounded-lg
+                            {% if message.tags == 'success' %} bg-green-900/50 text-green-300 border border-green-500
+                            {% elif message.tags == 'error' %} bg-red-900/50 text-red-300 border border-red-500
+                            {% elif message.tags == 'warning' %} bg-yellow-900/50 text-yellow-300 border border-yellow-500
+                            {% else %} bg-blue-900/50 text-blue-300 border border-blue-500
+                            {% endif %}" role="alert">
+                            <span class="font-medium">{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% block content %}{% endblock %}
+            </main>
         </div>
-    </nav>
+    </div>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('#nav-links a.sidebar-link');
 
-    <main class="flex-grow container mx-auto px-4 py-8">
-        {% if messages %}
-            <div class="max-w-7xl mx-auto">
-            {% for message in messages %}
-                <div class="p-4 mb-4 text-sm rounded-lg
-                    {% if message.tags == 'success' %} bg-green-900/50 text-green-300 border border-green-500
-                    {% elif message.tags == 'error' %} bg-red-900/50 text-red-300 border border-red-500
-                    {% elif message.tags == 'warning' %} bg-yellow-900/50 text-yellow-300 border border-yellow-500
-                    {% else %} bg-blue-900/50 text-blue-300 border border-blue-500
-                    {% endif %}" role="alert">
-                    <span class="font-medium">{{ message }}</span>
-                </div>
-            {% endfor %}
-            </div>
-        {% endif %}
-
-        {% block content %}{% endblock %}
-    </main>
-
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('href');
+                // Lógica para destacar o link ativo
+                if (currentPath === linkPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>

@@ -5,7 +5,9 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import TradingSignal, BacktestReport
+from django.views.decorators.http import require_POST
+
+from .models import TradingSignal, BacktestReport, StrategyLog
 from .forms import BacktestForm
 from .tasks import run_backtest_task
 from core.models import Transaction
@@ -45,10 +47,17 @@ def agent_dashboard_view(request):
 
 @login_required
 def agent_reports_view(request):
+    """
+    (CORRIGIDO) Calcula e exibe a performance financeira das operações
+    executadas pelo agente de IA.
+    """
     user_profile = request.user.profile
+    # Filtra transações que foram originadas por um sinal do agente
     agent_transactions = Transaction.objects.filter(user_profile=user_profile, signal__is_executed=True).order_by('cryptocurrency', 'transaction_date')
+    
     performance_by_crypto = {}
 
+    # Calcula o custo e a receita por cada criptoativo
     for tx in agent_transactions:
         symbol = tx.cryptocurrency.symbol
         if symbol not in performance_by_crypto:
@@ -66,20 +75,23 @@ def agent_reports_view(request):
     total_trades = 0
     total_wins = 0
 
+    # Calcula o P/L e as métricas de vitória para cada ativo
     for symbol, data in performance_by_crypto.items():
         profit_loss = data['total_revenue'] - data['total_cost']
         data['profit_loss'] = profit_loss
         total_profit_loss += profit_loss
         
+        # Considera um "trade" como o conjunto de operações em um ativo
+        total_trades += 1
         if profit_loss > 0:
             data['is_win'] = True
-            total_wins +=1
+            total_wins += 1
         else:
             data['is_win'] = False
-        total_trades += 1
         
     win_rate = (total_wins / total_trades) * 100 if total_trades > 0 else 0
 
+    # Define o dicionário de contexto para o template
     context = {
         'page_title': 'Performance do Agente IA',
         'performance_data': performance_by_crypto,
@@ -115,13 +127,40 @@ def backtest_view(request):
 
 @login_required
 def backtest_status_view(request, report_id):
-    """
-    View de API que retorna o estado de um relatório de backtest específico.
-    """
-    try:
-        # Garante que um utilizador só pode verificar os seus próprios relatórios.
-        report = BacktestReport.objects.get(id=report_id, user_profile=request.user.profile)
-        return JsonResponse({'status': report.status})
-    except BacktestReport.DoesNotExist:
-        return JsonResponse({'status': 'NOT_FOUND'}, status=404)
+    report = get_object_or_404(BacktestReport, id=report_id, user_profile=request.user.profile)
+    return JsonResponse({'status': report.status})
 
+
+@login_required
+def strategy_log_view(request):
+    """
+    Exibe o histórico de reflexões da IA (Strategy Logs) e a estratégia ativa.
+    """
+    user_profile = request.user.profile
+    strategy_logs = StrategyLog.objects.filter(user_profile=user_profile).order_by('-created_at')
+    
+    context = {
+        'page_title': 'Gestor de Estratégia do Agente',
+        'strategy_logs': strategy_logs,
+        'active_strategy_prompt': user_profile.agent_strategy_prompt
+    }
+    return render(request, 'trading_agent/strategy_manager.html', context)
+
+
+@login_required
+@require_POST
+def apply_strategy_suggestion_view(request, log_id):
+    """
+    Aplica a sugestão de um StrategyLog ao perfil do usuário.
+    """
+    user_profile = request.user.profile
+    log_entry = get_object_or_404(StrategyLog, id=log_id, user_profile=user_profile)
+    
+    if log_entry.suggested_modifications:
+        user_profile.agent_strategy_prompt = log_entry.suggested_modifications
+        user_profile.save()
+        messages.success(request, "Nova sugestão de estratégia foi aplicada ao seu agente!")
+    else:
+        messages.warning(request, "Esta reflexão não continha uma sugestão de estratégia para aplicar.")
+        
+    return redirect('trading_agent:strategy_manager')
