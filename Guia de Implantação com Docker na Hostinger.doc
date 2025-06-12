@@ -1,0 +1,181 @@
+Guia de Implantação: CryptoTrader Pro com Docker na Hostinger
+Este guia descreve o processo passo a passo para implantar a sua aplicação Django "dockerizada" num servidor VPS ou Cloud da Hostinger.
+
+Pré-requisitos
+Conta Hostinger: Um plano VPS ou Cloud que lhe dê acesso root ao servidor.
+
+Docker e Docker Compose: Instalados na sua máquina local para testes.
+
+Repositório Git: O seu projeto deve estar num repositório Git (ex: GitHub, GitLab) para facilitar a transferência para o servidor.
+
+Parte 1: Preparar o Ambiente na Hostinger
+Aceder ao Servidor via SSH:
+
+No painel da Hostinger, encontre o endereço IP do seu servidor e a palavra-passe de root.
+
+Abra um terminal e conecte-se:
+
+ssh root@SEU_ENDERECO_IP_AQUI
+
+Introduza a sua palavra-passe.
+
+Atualizar o Sistema e Instalar o Docker:
+
+É uma boa prática atualizar os pacotes do seu servidor:
+
+apt update && apt upgrade -y
+
+Instale o Docker:
+
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+Instalar o Docker Compose:
+
+O Docker Compose permite gerir múltiplos contentores facilmente.
+
+apt-get install docker-compose-plugin -y
+
+Verifique a instalação:
+
+docker compose version
+
+Instalar o Git:
+
+Para clonar o seu projeto:
+
+apt install git -y
+
+Parte 2: Implantar a Aplicação
+Clonar o Repositório do Projeto:
+
+Navegue para um diretório apropriado (ex: /var/www/) e clone o seu projeto.
+
+cd /var/www/
+git clone SEU_URL_DO_REPOSITORIO.git
+cd nome-do-seu-projeto/
+
+Criar o Ficheiro de Ambiente (.env):
+
+Este é um passo CRÍTICO. Nunca envie o seu ficheiro .env para o Git. Crie-o diretamente no servidor.
+
+nano .env
+
+Copie e cole o conteúdo do seu ficheiro .env local, mas com as configurações de produção:
+
+DJANGO_SECRET_KEY='UMA_NOVA_CHAVE_SECRETA_MUITO_FORTE_GERADA_PARA_PRODUCAO'
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS='SEU_DOMINIO.com,www.SEU_DOMINIO.com,SEU_ENDERECO_IP_AQUI'
+
+DJANGO_FIELD_ENCRYPTION_KEY='UMA_CHAVE_DE_CRIPTOGRAFIA_DIFERENTE_DA_DE_DEV'
+
+# Chaves de API reais para produção
+BINANCE_API_KEY='SUA_CHAVE_REAL_BINANCE'
+BINANCE_API_SECRET='SEU_SEGREDO_REAL_BINANCE'
+BINANCE_TESTNET=False # Importante!
+
+GEMINI_API_KEY='SUA_CHAVE_GEMINI'
+NEWS_API_KEY='SUA_CHAVE_NEWSAPI'
+
+# Configurações do Celery para produção
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+Importante: DJANGO_DEBUG deve ser False. Em ALLOWED_HOSTS, adicione o seu domínio e o IP do servidor.
+
+Parte 3: Iniciar os Contentores
+Construir e Iniciar os Serviços:
+
+Dentro do diretório do seu projeto no servidor, execute o docker-compose. O comando up irá construir as imagens (se não existirem) e iniciar todos os serviços.
+
+A flag -d (detached) executa os contentores em segundo plano.
+
+A flag --build força a reconstrução das imagens, útil para quando faz alterações no código.
+
+docker compose up -d --build
+
+Verificar o Estado dos Contentores:
+
+Para ver se todos os serviços estão a correr sem erros:
+
+docker compose ps
+
+Para ver os logs em tempo real (útil para depuração):
+
+docker compose logs -f
+
+Neste ponto, a sua aplicação Django está a correr dentro de um contentor, mas apenas acessível internamente. O passo final é expô-la à internet de forma segura.
+
+Parte 4: Configurar o Nginx como Proxy Reverso
+O Nginx é um servidor web de alta performance que irá receber os pedidos externos (HTTP/HTTPS) e encaminhá-los para o seu contentor Django (Gunicorn).
+
+Instalar o Nginx:
+
+apt install nginx -y
+
+Configurar o Firewall:
+
+Permita o tráfego no Nginx.
+
+ufw allow 'Nginx Full'
+
+Criar o Ficheiro de Configuração do Nginx para o seu Domínio:
+
+Crie um novo ficheiro de configuração:
+
+nano /etc/nginx/sites-available/cryptotrader
+
+Cole a seguinte configuração, substituindo seudominio.com pelo seu domínio real:
+
+server {
+    listen 80;
+    server_name seudominio.com www.seudominio.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static/ {
+        alias /var/www/nome-do-seu-projeto/staticfiles/;
+    }
+}
+
+Explicação:
+
+listen 80;: Escuta os pedidos HTTP padrão.
+
+proxy_pass http://127.0.0.1:8000;: Encaminha o tráfego para a sua aplicação Django que está a correr na porta 8000 (a mesma que expusemos no docker-compose).
+
+location /static/: Diz ao Nginx para servir os ficheiros estáticos diretamente, o que é muito mais eficiente.
+
+Ativar a Configuração:
+
+Crie um link simbólico para ativar o site:
+
+ln -s /etc/nginx/sites-available/cryptotrader /etc/nginx/sites-enabled/
+
+Teste a configuração do Nginx para erros de sintaxe:
+
+nginx -t
+
+Se estiver tudo OK, reinicie o Nginx para aplicar as alterações:
+
+systemctl restart nginx
+
+(Opcional mas Recomendado) Configurar HTTPS com Let's Encrypt:
+
+Para segurança, instale o Certbot para obter um certificado SSL gratuito.
+
+apt install certbot python3-certbot-nginx -y
+
+Execute o Certbot, que irá configurar automaticamente o SSL para o seu domínio:
+
+certbot --nginx -d seudominio.com -d www.seudominio.com
+
+Siga as instruções no ecrã. Ele irá modificar o seu ficheiro de configuração do Nginx para usar HTTPS e configurar a renovação automática.
+
+A sua aplicação agora está totalmente implantada, segura e acessível através do seu domínio!
