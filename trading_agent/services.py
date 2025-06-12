@@ -6,12 +6,13 @@ from django.conf import settings
 from .models import TradingSignal
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from core.views import get_valid_api_client, _process_successful_order, adjust_quantity_to_lot_size
+# (ATUALIZADO) Garante que a importação usa o nome correto da nova função.
+from core.views import get_binance_client, _process_successful_order, adjust_quantity_to_lot_size
 from core.models import Holding
 
-def get_gemini_trade_decision(profile, crypto, tech_data, sentiment_data, holding_data):
+def get_gemini_trade_decision(profile, crypto, tech_data, sentiment_data, holding_data, save_signal=True):
     """
-    Monta o prompt, consulta a API Gemini e salva o sinal de trading retornado.
+    Monta o prompt, consulta a API Gemini e, opcionalmente, salva o sinal de trading.
     """
     prompt = f"""
     Você é um experiente analista quantitativo e trader de criptomoedas. Sua tarefa é analisar os dados fornecidos e gerar um sinal de trade (compra, venda ou manter) para o ativo {crypto.symbol} para um usuário com perfil de risco moderado.
@@ -49,7 +50,6 @@ def get_gemini_trade_decision(profile, crypto, tech_data, sentiment_data, holdin
         print("Chave da API do Gemini não configurada.")
         return None
 
-    # (CORREÇÃO) Alterado o nome do modelo para uma versão mais recente e estável.
     api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     headers = {'Content-Type': 'application/json'}
@@ -63,16 +63,20 @@ def get_gemini_trade_decision(profile, crypto, tech_data, sentiment_data, holdin
         
         ai_data = json.loads(json_text)
 
-        signal = TradingSignal.objects.create(
-            user_profile=profile,
-            cryptocurrency=crypto,
-            decision=ai_data.get('decision', 'HOLD').upper(),
-            confidence_score=Decimal(ai_data.get('confidence_score', 0.0)),
-            stop_loss_price=Decimal(ai_data.get('stop_loss_price', 0.0)),
-            take_profit_price=Decimal(ai_data.get('take_profit_price', 0.0)),
-            justification=ai_data.get('justification', 'Nenhuma justificativa fornecida.')
-        )
-        return signal
+        if save_signal:
+            signal = TradingSignal.objects.create(
+                user_profile=profile,
+                cryptocurrency=crypto,
+                decision=ai_data.get('decision', 'HOLD').upper(),
+                confidence_score=Decimal(ai_data.get('confidence_score', 0.0)),
+                stop_loss_price=Decimal(ai_data.get('stop_loss_price', 0.0)),
+                take_profit_price=Decimal(ai_data.get('take_profit_price', 0.0)),
+                justification=ai_data.get('justification', 'Nenhuma justificativa fornecida.')
+            )
+            return signal
+        else:
+            return ai_data
+
     except (requests.exceptions.RequestException, KeyError, IndexError, json.JSONDecodeError) as e:
         print(f"Erro ao comunicar com a API Gemini ou ao processar a resposta: {e}")
         return None
@@ -83,7 +87,8 @@ def execute_trade_from_signal(signal):
     Executa uma ordem na Binance baseada em um TradingSignal.
     """
     user_profile = signal.user_profile
-    client = get_valid_api_client(user_profile)
+    # (ATUALIZADO) Usa a nova função para obter o cliente
+    client = get_binance_client(user_profile=user_profile)
 
     if not client:
         print(f"Cliente Binance inválido para o usuário {user_profile.user.username}.")
@@ -98,7 +103,8 @@ def execute_trade_from_signal(signal):
             balance = client.get_asset_balance(asset=quote_currency)
             available_balance = Decimal(balance['free'])
             
-            order_value = available_balance * settings.AGENT_BUY_RISK_PERCENTAGE
+            buy_risk = user_profile.agent_buy_risk_percentage / Decimal('100.0')
+            order_value = available_balance * buy_risk
             
             if order_value < 10:
                 print(f"Valor da ordem ({order_value:.2f}) abaixo do mínimo para {user_profile.user.username}.")
@@ -109,7 +115,9 @@ def execute_trade_from_signal(signal):
 
         elif signal.decision == 'SELL':
             holding = Holding.objects.get(user_profile=user_profile, cryptocurrency=crypto)
-            quantity_to_sell = holding.quantity * settings.AGENT_SELL_RISK_PERCENTAGE
+            
+            sell_risk = user_profile.agent_sell_risk_percentage / Decimal('100.0')
+            quantity_to_sell = holding.quantity * sell_risk
 
             symbol_info = client.get_symbol_info(api_symbol)
             lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
@@ -126,7 +134,7 @@ def execute_trade_from_signal(signal):
         else:
             return
 
-        _process_successful_order(user_profile, order_response, crypto)
+        _process_successful_order(user_profile, order_response, crypto, signal=signal)
         
         signal.is_executed = True
         signal.save()

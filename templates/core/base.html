@@ -125,6 +125,7 @@
                         <a href="{% url 'core:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Dashboard" %}</a>
                         <!-- (ADICIONADO) Link para o Dashboard do Agente -->
                         <a href="{% url 'trading_agent:dashboard' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Agente IA</a>
+                        <a href="{% url 'trading_agent:reports' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Relatórios IA</a>
                         <a href="{% url 'core:transaction_history' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Histórico" %}</a>
                         <a href="{% url 'core:reports' %}" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">{% trans "Relatórios" %}</a>
                     {% endif %}

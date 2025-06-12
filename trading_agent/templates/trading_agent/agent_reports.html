@@ -1,0 +1,66 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% load humanize %}
+
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Cabeçalho -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white">{{ page_title }}</h1>
+            <p class="mt-1 text-lg text-gray-400">Análise de resultados das operações automáticas.</p>
+        </div>
+
+        <!-- Cards de Métricas Gerais -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Lucro/Prejuízo Total (P/L)</h3>
+                <p class="mt-2 text-3xl font-extrabold {% if total_profit_loss > 0 %}text-green-400{% elif total_profit_loss < 0 %}text-red-400{% else %}text-white{% endif %}">
+                    {{ total_profit_loss|floatformat:2|intcomma }} USDT
+                </p>
+            </div>
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Taxa de Acerto (Win Rate)</h3>
+                <p class="mt-2 text-3xl font-extrabold text-white">{{ win_rate|floatformat:1 }}%</p>
+            </div>
+            <div class="bg-gray-800 rounded-2xl shadow-lg p-6">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider">Total de Ativos Operados</h3>
+                <p class="mt-2 text-3xl font-extrabold text-white">{{ total_trades }}</p>
+            </div>
+        </div>
+
+        <!-- Tabela de Performance por Ativo -->
+        <div class="bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <h2 class="text-xl font-semibold text-white p-6">Performance por Ativo</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm text-left text-gray-300">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-700/50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Ativo</th>
+                            <th scope="col" class="px-6 py-3 text-right">Custo Total</th>
+                            <th scope="col" class="px-6 py-3 text-right">Receita Total</th>
+                            <th scope="col" class="px-6 py-3 text-right">Lucro/Prejuízo (P/L)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for symbol, data in performance_data.items %}
+                        <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                            <td class="px-6 py-4 font-semibold text-white">{{ symbol }}</td>
+                            <td class="px-6 py-4 text-right text-red-400">{{ data.total_cost|floatformat:2|intcomma }}</td>
+                            <td class="px-6 py-4 text-right text-green-400">{{ data.total_revenue|floatformat:2|intcomma }}</td>
+                            <td class="px-6 py-4 text-right font-bold {% if data.profit_loss > 0 %}text-green-400{% elif data.profit_loss < 0 %}text-red-400{% else %}text-white{% endif %}">
+                                {{ data.profit_loss|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">Nenhuma operação do agente foi executada ainda.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

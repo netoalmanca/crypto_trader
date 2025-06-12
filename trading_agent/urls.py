@@ -9,4 +9,5 @@ app_name = 'trading_agent'
 urlpatterns = [
     # Rota para o dashboard principal do agente de IA.
     path('dashboard/', views.agent_dashboard_view, name='dashboard'),
+    path('reports/', views.agent_reports_view, name='reports')
 ]

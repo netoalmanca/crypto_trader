@@ -9,6 +9,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import csv
 from django.http import HttpResponse, JsonResponse
 import requests
+import time # (ADICIONADO) Importa a biblioteca de tempo
+
 from .forms import (
     CustomUserCreationForm, CustomAuthenticationForm, UserProfileAPIForm,
     TransactionForm, LimitBuyForm, LimitSellForm, MarketBuyForm, MarketSellForm
@@ -26,7 +28,46 @@ import datetime
 import json
 
 # --- Funções Helper ---
+
+def get_binance_client(user_profile=None):
+    """
+    (NOVO) Função centralizada para criar um cliente Binance com o tempo sincronizado.
+    Se um user_profile for fornecido, cria um cliente autenticado.
+    Caso contrário, cria um cliente público.
+    """
+    api_key = None
+    api_secret = None
+    testnet = True  # Padrão para testnet por segurança
+
+    if user_profile:
+        api_key = user_profile.binance_api_key
+        api_secret = user_profile.binance_api_secret
+        testnet = user_profile.use_testnet
+        # Verifica se as chaves descriptografadas são válidas
+        if not all((api_key, api_secret)) or 'DECRYPTION_FAILED' in (api_key, api_secret):
+            return None
+    
+    # Se não for um cliente autenticado, usa as chaves públicas (se houver)
+    if not api_key:
+        api_key = settings.BINANCE_API_KEY
+    if not api_secret:
+        api_secret = settings.BINANCE_API_SECRET
+
+    client = Client(api_key, api_secret, tld='com', testnet=testnet)
+    
+    # Sincroniza o tempo do cliente com o servidor da Binance
+    try:
+        server_time = client.get_server_time()
+        time_offset = server_time['serverTime'] - int(time.time() * 1000)
+        client.timestamp_offset = time_offset
+        print(f"Cliente Binance sincronizado. Offset de tempo: {time_offset}ms")
+    except requests.exceptions.RequestException as e:
+        print(f"Aviso: Não foi possível sincronizar o tempo com a Binance. Erro: {e}")
+
+    return client
+
 def adjust_quantity_to_lot_size(quantity_str, step_size_str):
+    # ... (código inalterado) ...
     quantity = Decimal(quantity_str); step_size = Decimal(step_size_str)
     if step_size <= 0: return quantity.quantize(Decimal('1e-8'), rounding=ROUND_DOWN)
     precision = len(step_size_str.rstrip('0').split('.')[1]) if '.' in step_size_str else 0
@@ -34,19 +75,18 @@ def adjust_quantity_to_lot_size(quantity_str, step_size_str):
     return adjusted.quantize(Decimal('1e-' + str(precision)), rounding=ROUND_DOWN)
 
 def adjust_price_to_tick_size(price_str, tick_size_str):
+    # ... (código inalterado) ...
     price = Decimal(price_str); tick_size = Decimal(tick_size_str)
     if tick_size <= 0: return price
     precision = len(tick_size_str.rstrip('0').split('.')[1]) if '.' in tick_size_str else 0
     quotient = (price / tick_size).to_integral_value(rounding=ROUND_DOWN)
     return (quotient * tick_size).quantize(Decimal('1e-' + str(precision)))
 
-def get_valid_api_client(user_profile):
-    api_key, secret = user_profile.binance_api_key, user_profile.binance_api_secret
-    if not all((api_key, secret)) or 'DECRYPTION_FAILED' in (api_key, secret): return None
-    return Client(api_key, secret, tld='com', testnet=user_profile.use_testnet)
+# (REMOVIDO) A função antiga get_valid_api_client foi substituída pela nova get_binance_client
 
 @db_transaction.atomic
 def recalculate_holdings(user_profile):
+    # ... (código inalterado) ...
     Holding.objects.filter(user_profile=user_profile).delete()
     transacted_cryptos = Cryptocurrency.objects.filter(transactions__user_profile=user_profile).distinct()
     
@@ -70,7 +110,8 @@ def recalculate_holdings(user_profile):
             )
 
 @db_transaction.atomic
-def _process_successful_order(user_profile, order_response, crypto):
+def _process_successful_order(user_profile, order_response, crypto, signal=None):
+    # ... (código inalterado) ...
     if not order_response or not order_response.get('fills'):
         raise ValueError("A resposta da ordem da Binance não continha 'fills' para processar.")
     transaction_type = order_response.get('side')
@@ -86,11 +127,13 @@ def _process_successful_order(user_profile, order_response, crypto):
         quantity_crypto=total_quantity_crypto, price_per_unit=average_price,
         total_value=total_value_quote, fees=total_fees,
         transaction_date=datetime.datetime.fromtimestamp(order_response['transactTime'] / 1000, tz=datetime.timezone.utc),
-        binance_order_id=order_id, notes=f"Ordem a mercado executada. Taxas pagas em {fee_currency}."
+        binance_order_id=order_id, notes=f"Ordem a mercado executada. Taxas pagas em {fee_currency}.",
+        signal=signal
     )
     recalculate_holdings(user_profile)
 
 # --- Views ---
+# (As views de auth, index e dashboard permanecem inalteradas)
 def index_view(request):
     return render(request, 'core/index.html', {'page_title': "Bem-vindo ao Crypto Trader Pro"})
 
@@ -199,9 +242,14 @@ def recalculate_holdings_view(request):
 
 @login_required
 def cryptocurrency_list_view(request):
-    client = Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, testnet=True)
+    client = get_binance_client() # (ATUALIZADO)
+    if not client:
+        messages.error(request, "Não foi possível conectar à Binance para obter dados de mercado.")
+        return render(request, 'core/cryptocurrency_list.html', {'cryptocurrencies_page': []})
+
     cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
     enriched_cryptos_data = []
+    # ... (código inalterado) ...
     for crypto in cryptos_from_db:
         data = {'db_instance': crypto}
         try:
@@ -219,11 +267,12 @@ def cryptocurrency_list_view(request):
         cryptocurrencies_page = paginator.page(paginator.num_pages)
     return render(request, 'core/cryptocurrency_list.html', {'page_title': 'Lista de Criptomoedas', 'cryptocurrencies_page': cryptocurrencies_page})
 
+
 @login_required
 def cryptocurrency_detail_view(request, symbol):
     crypto = get_object_or_404(Cryptocurrency, symbol__iexact=symbol)
     klines_data_json, chart_error_message = "[]", None
-    client = get_valid_api_client(request.user.profile) or Client(settings.BINANCE_API_KEY, settings.BINANCE_API_SECRET, testnet=True)
+    client = get_binance_client(user_profile=request.user.profile) # (ATUALIZADO)
     if client:
         try:
             api_symbol_pair = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
@@ -234,13 +283,14 @@ def cryptocurrency_detail_view(request, symbol):
         except BinanceAPIException as e:
             chart_error_message = f"Erro ao buscar dados do gráfico: {e.message}"
     else:
-        chart_error_message = "Chaves API não configuradas."
+        chart_error_message = "Chaves API não configuradas ou inválidas."
     if chart_error_message: messages.error(request, chart_error_message)
     context = {'page_title': f"Detalhes de {crypto.name}", 'crypto': crypto, 'klines_data_json': klines_data_json, 'chart_error_message': chart_error_message}
     return render(request, 'core/cryptocurrency_detail.html', context)
 
 @login_required
 def explain_crypto_with_ai_view(request):
+    # ... (código inalterado) ...
     if request.method != 'POST':
         return JsonResponse({'error': 'Apenas o método POST é permitido'}, status=405)
     
@@ -257,7 +307,7 @@ def explain_crypto_with_ai_view(request):
         return JsonResponse({'error': 'A chave da API do Gemini não foi configurada no servidor.'}, status=500)
 
     prompt = f"Explique de forma simples e concisa para um iniciante o que é a criptomoeda {crypto_name} e qual o seu principal propósito ou caso de uso. Responda em português do Brasil."
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+    api_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={gemini_api_key}"
     payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
     headers = {'Content-Type': 'application/json'}
 
@@ -267,10 +317,9 @@ def explain_crypto_with_ai_view(request):
         if response.status_code == 403:
             return JsonResponse({'error': 'Erro 403: Acesso Negado. Verifique se a sua chave de API do Gemini é válida, se a API está ativada no seu projeto Google Cloud e se não há restrições de IP ou domínio.'}, status=403)
 
-        response.raise_for_status() # Lança um erro para status HTTP 4xx/5xx
+        response.raise_for_status() 
         result = response.json()
 
-        # Análise mais segura da resposta
         if "candidates" in result and result["candidates"]:
             candidate = result["candidates"][0]
             if "content" in candidate and "parts" in candidate["content"] and candidate["content"]["parts"]:
@@ -278,10 +327,9 @@ def explain_crypto_with_ai_view(request):
                 if text:
                     return JsonResponse({'explanation': text})
         
-        # Se não encontrou o texto, retorna um erro detalhado
         return JsonResponse({
             'error': 'Resposta da API do Gemini recebida, mas em formato inesperado.',
-            'api_response': result # Envia a resposta da API para depuração
+            'api_response': result 
         }, status=500)
 
     except requests.exceptions.Timeout:
@@ -293,14 +341,15 @@ def explain_crypto_with_ai_view(request):
     except Exception as e:
         return JsonResponse({'error': f'Ocorreu um erro inesperado no servidor: {e}'}, status=500)
 
-
 @login_required
 def open_orders_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
-        messages.error(request, "Chaves API inválidas.")
+        messages.error(request, "Chaves API inválidas ou não configuradas.")
         return redirect('core:update_api_keys')
+    
+    # ... (resto da lógica inalterada) ...
     if request.method == 'POST':
         order_id = request.POST.get('order_id')
         symbol = request.POST.get('symbol')
@@ -322,9 +371,9 @@ def open_orders_view(request):
         messages.error(request, f"Erro ao buscar ordens: {e.message}")
     return render(request, 'core/open_orders.html', {'page_title': 'Minhas Ordens Abertas', 'open_orders': processed_orders})
 
-
 @login_required
 def transaction_history_view(request):
+    # ... (código inalterado) ...
     transaction_list = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
     paginator = Paginator(transaction_list, 15) 
     page_number = request.GET.get('page')
@@ -340,9 +389,9 @@ def transaction_history_view(request):
         'page_title': 'Histórico de Transações'
     })
 
-
 @login_required
 def export_transactions_csv_view(request):
+    # ... (código inalterado) ...
     filename = f"historico_transacoes_{request.user.username}_{timezone.now().strftime('%Y%m%d')}.csv"
     response = HttpResponse(
         content_type='text/csv; charset=utf-8',
@@ -373,6 +422,7 @@ def export_transactions_csv_view(request):
 @login_required
 @db_transaction.atomic
 def add_transaction_view(request):
+    # ... (código inalterado) ...
     user_profile = get_object_or_404(UserProfile, user=request.user)
     form = TransactionForm(request.POST or None, user_profile=user_profile)
     if request.method == 'POST' and form.is_valid():
@@ -388,11 +438,12 @@ def add_transaction_view(request):
 @db_transaction.atomic
 def sync_binance_trades_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
         messages.error(request, "Chaves API inválidas ou não configuradas para sincronizar.")
         return redirect('core:transaction_history')
 
+    # ... (resto da lógica inalterada) ...
     existing_trade_ids = set(
         note.split("Trade ID: ")[1] for note in
         Transaction.objects.filter(user_profile=user_profile, notes__icontains="Trade ID:").values_list('notes', flat=True)
@@ -435,9 +486,10 @@ def sync_binance_trades_view(request):
 @login_required
 def trade_market_buy_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
         messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    # ... (resto da lógica inalterada) ...
     form = MarketBuyForm(request.POST or None, user_currency=BASE_RATE_CURRENCY)
     if request.method == 'POST' and form.is_valid():
         crypto = form.cleaned_data['cryptocurrency']
@@ -464,9 +516,10 @@ def trade_market_buy_view(request):
 @login_required
 def trade_market_sell_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
         messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    # ... (resto da lógica inalterada) ...
     form = MarketSellForm(request.POST or None, user_profile=user_profile, quote_currency=BASE_RATE_CURRENCY)
     if request.method == 'POST' and form.is_valid():
         crypto = form.cleaned_data['cryptocurrency']
@@ -502,9 +555,10 @@ def trade_market_sell_view(request):
 @login_required
 def trade_limit_buy_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
         messages.error(request, "Chaves API inválidas ou não configuradas."); return redirect('core:update_api_keys')
+    # ... (resto da lógica inalterada) ...
     form = LimitBuyForm(request.POST or None, user_currency=user_profile.preferred_fiat_currency)
     if request.method == 'POST' and form.is_valid():
         crypto = form.cleaned_data['cryptocurrency']
@@ -530,9 +584,10 @@ def trade_limit_buy_view(request):
 @login_required
 def trade_limit_sell_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    client = get_valid_api_client(user_profile)
+    client = get_binance_client(user_profile=user_profile) # (ATUALIZADO)
     if not client:
         messages.error(request, "Chaves API inválidas ou não configuradas."); return redirect('core:update_api_keys')
+    # ... (resto da lógica inalterada) ...
     form = LimitSellForm(request.POST or None, user_profile=user_profile)
     if request.method == 'POST' and form.is_valid():
         crypto = form.cleaned_data['cryptocurrency']
@@ -554,3 +609,4 @@ def trade_limit_sell_view(request):
         except (BinanceAPIException, ValueError, ExchangeRate.DoesNotExist) as e:
             messages.error(request, f"Erro ao criar ordem: {getattr(e, 'message', str(e))}")
     return render(request, 'core/trade_limit_sell.html', {'form': form, 'page_title': "Vender com Ordem Limite"})
+

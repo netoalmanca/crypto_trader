@@ -64,13 +64,11 @@ class UserProfile(models.Model):
         default=True, verbose_name="Usar Ambiente de Teste (Testnet)",
         help_text="Se marcado, todas as operações de trade usarão a Testnet da Binance (sem fundos reais). Desmarque para usar sua conta real (Mainnet)."
     )
-    # (ADICIONADO NA ETAPA 7)
     enable_auto_trading = models.BooleanField(
         default=False,
         verbose_name="Ativar Agente de Trading Automático",
         help_text="Se marcado, o agente de IA poderá executar operações automaticamente com base na sua estratégia."
     )
-    # (ADICIONADO AGORA)
     agent_buy_risk_percentage = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal('5.00'),
         verbose_name="Risco por Compra (%)",
@@ -97,7 +95,6 @@ class UserProfile(models.Model):
     def __str__(self): return f"Perfil de {self.user.username}"
 
 
-# ... (Resto dos modelos: Holding, Transaction, etc. permanecem inalterados) ...
 class Holding(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='holdings')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE, related_name='held_by_users')
@@ -134,6 +131,16 @@ class Transaction(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, help_text="Data e hora do registro no sistema")
     binance_order_id = models.CharField(max_length=255, blank=True, null=True, help_text="ID da ordem na Binance (se aplicável)")
     notes = models.TextField(blank=True, null=True, help_text="Notas adicionais sobre a transação")
+    
+    # (ATUALIZADO) Adiciona a relação com o TradingSignal
+    signal = models.ForeignKey(
+        'trading_agent.TradingSignal',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transactions'
+    )
+
     class Meta:
         verbose_name = "Transação"
         verbose_name_plural = "Transações"
@@ -169,3 +176,4 @@ class PortfolioSnapshot(models.Model):
 
     def __str__(self):
         return f"Snapshot de {self.user_profile.user.username} em {self.date}: {self.total_value} {self.currency}"
+
