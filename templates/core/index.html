@@ -5,72 +5,123 @@
 {% block title %}Crypto Trader Pro - Sua Plataforma de Trading Inteligente{% endblock %}
 
 {% block content %}
-<div class="text-center">
-    <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
-        Trading Inteligente para Seus Ativos Digitais
-    </h1>
-    <p class="text-lg sm:text-xl text-gray-400 mb-10 max-w-3xl mx-auto">
-        Conecte sua conta da Binance a um dashboard poderoso e deixe que nosso agente com IA Gemini encontre as melhores oportunidades para você.
-    </p>
+<div class="text-white">
+    <!-- Secção Hero -->
+    <section class="text-center py-20 sm:py-32">
+        <div class="container mx-auto px-4">
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-4">
+                Trading Inteligente para Seus Ativos Digitais
+            </h1>
+            <p class="text-lg sm:text-xl text-light-text max-w-3xl mx-auto mb-8">
+                Conecte sua conta da Binance a um dashboard poderoso e deixe que nosso agente com IA Gemini encontre as melhores oportunidades para você, 24/7.
+            </p>
+            <div class="flex justify-center space-x-4">
+                {% if not user.is_authenticated %}
+                    <a href="{% url 'core:register' %}" class="btn-primary !w-auto text-base !py-3 !px-8 bg-accent hover:bg-cyan-600 transition-transform transform hover:scale-105">Comece Agora</a>
+                    <a href="#features" class="btn-primary !w-auto text-base !py-3 !px-8 bg-secondary hover:bg-gray-700">Saber Mais</a>
+                {% else %}
+                    <a href="{% url 'core:dashboard' %}" class="btn-primary !w-auto text-base !py-3 !px-8 bg-accent hover:bg-cyan-600 transition-transform transform hover:scale-105">Acessar meu Dashboard</a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Secção de Funcionalidades -->
+    <section id="features" class="py-20 sm:py-24 bg-secondary/50 rounded-3xl">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl sm:text-4xl font-bold">Uma Plataforma Completa e Inteligente</h2>
+                <p class="text-light-text mt-2">Todas as ferramentas que você precisa para otimizar suas operações.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Card 1: Agente de IA -->
+                <div class="bg-secondary p-8 rounded-2xl">
+                    <div class="bg-accent/10 text-accent h-12 w-12 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-robot text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Agente de Trading com IA</h3>
+                    <p class="text-light-text">Nosso agente com Gemini analisa dados técnicos e sentimento de mercado para gerar sinais de compra e venda.</p>
+                </div>
+                <!-- Card 2: Dashboard Analítico -->
+                <div class="bg-secondary p-8 rounded-2xl">
+                     <div class="bg-accent/10 text-accent h-12 w-12 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-chart-pie text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Dashboard Analítico</h3>
+                    <p class="text-light-text">Visualize seu portfólio, analise a performance do agente e simule estratégias com a nossa ferramenta de backtesting.</p>
+                </div>
+                <!-- Card 3: Controle Total -->
+                <div class="bg-secondary p-8 rounded-2xl">
+                     <div class="bg-accent/10 text-accent h-12 w-12 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-sliders-h text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Controle Total</h3>
+                    <p class="text-light-text">Você decide. Ative ou desative o agente e ajuste os parâmetros de risco, como o capital por operação e o limiar de confiança.</p>
+                </div>
+                <!-- Card 4: Segurança -->
+                <div class="bg-secondary p-8 rounded-2xl">
+                     <div class="bg-accent/10 text-accent h-12 w-12 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-shield-alt text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Segurança em Primeiro Lugar</h3>
+                    <p class="text-light-text">Suas chaves de API são criptografadas com segurança de ponta e você tem controle total sobre o ambiente (Testnet/Mainnet).</p>
+                </div>
+            </div>
+        </div>
+    </section>
     
-    <div class="bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl max-w-4xl mx-auto">
-        <h2 class="text-2xl sm:text-3xl font-semibold text-white mb-8">Funcionalidades Principais</h2>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-            <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                    <i class="fas fa-robot fa-lg text-purple-400"></i>
+    <!-- Secção "Como Funciona" -->
+    <section class="py-20 sm:py-24">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold mb-12">Ciclo de Operação e Aprendizagem</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Passo 1 -->
+                <div class="text-center">
+                    <div class="bg-secondary h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-accent/20">
+                        <i class="fas fa-database text-3xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">1. Recolha de Dados</h3>
+                    <p class="text-light-text">O sistema recolhe dados técnicos e notícias do mercado em tempo real.</p>
                 </div>
-                <div>
-                    <h3 class="text-lg font-bold text-white">Agente de Trading com IA</h3>
-                    <p class="text-gray-400 mt-1">Nosso agente, com tecnologia Gemini, analisa dados técnicos e sentimento de mercado para gerar sinais de compra e venda, com gerenciamento de risco integrado.</p>
+                <!-- Passo 2 -->
+                <div class="text-center">
+                    <div class="bg-secondary h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-accent/20">
+                        <i class="fas fa-brain text-3xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">2. Decisão da IA</h3>
+                    <p class="text-light-text">A IA analisa os dados e a sua estratégia para gerar um sinal de trade.</p>
                 </div>
-            </div>
-            <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <i class="fas fa-chart-pie fa-lg text-cyan-400"></i>
+                <!-- Passo 3 -->
+                <div class="text-center">
+                    <div class="bg-secondary h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-accent/20">
+                        <i class="fas fa-paper-plane text-3xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">3. Execução</h3>
+                    <p class="text-light-text">Sinais de alta confiança são enviados e executados na sua conta da Binance.</p>
                 </div>
-                <div>
-                    <h3 class="text-lg font-bold text-white">Dashboard Analítico Completo</h3>
-                    <p class="text-gray-400 mt-1">Visualize seu portfólio, analise a performance do agente e simule estratégias com a nossa ferramenta de backtesting integrada.</p>
-                </div>
-            </div>
-            <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <i class="fas fa-sliders-h fa-lg text-cyan-400"></i>
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-white">Controle Total do Utilizador</h3>
-                    <p class="text-gray-400 mt-1">Você decide. Ative ou desative o agente, e ajuste os parâmetros de risco, como o capital por operação e o limiar de confiança, a qualquer momento.</p>
-                </div>
-            </div>
-            <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <i class="fas fa-shield-alt fa-lg text-cyan-400"></i>
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-white">Segurança em Primeiro Lugar</h3>
-                    <p class="text-gray-400 mt-1">Suas chaves de API são criptografadas com segurança de ponta e você tem controle total sobre o ambiente de negociação (Testnet/Mainnet).</p>
+                <!-- Passo 4 -->
+                <div class="text-center">
+                    <div class="bg-secondary h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-accent/20">
+                        <i class="fas fa-sync-alt text-3xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">4. Aprendizagem</h3>
+                    <p class="text-light-text">O agente analisa a sua performance e sugere melhorias para a sua própria estratégia.</p>
                 </div>
             </div>
         </div>
+    </section>
 
-        {% if not user.is_authenticated %}
-        <div class="mt-12 flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <a href="{% url 'core:register' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Crie sua Conta e Ative o Agente</a>
+    <!-- Secção Final de Call to Action -->
+    <section class="py-20 sm:py-24">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold">O Futuro do Trading é Adaptativo.</h2>
+            <p class="text-light-text mt-4 max-w-2xl mx-auto mb-8">
+                Estamos evoluindo o Crypto Trader Pro de um painel de controle para um copiloto de investimentos. Comece a usar o poder da automação inteligente hoje.
+            </p>
+            {% if not user.is_authenticated %}
+                <a href="{% url 'core:register' %}" class="btn-primary !w-auto text-lg !py-4 !px-10 bg-accent hover:bg-cyan-600 transition-transform transform hover:scale-105">Crie sua Conta Gratuita</a>
+            {% endif %}
         </div>
-        {% else %}
-        <div class="mt-12">
-            <a href="{% url 'core:dashboard' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-8 text-lg rounded-lg transition-transform transform hover:scale-105">Acessar meu Dashboard</a>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="mt-16 p-6 max-w-4xl mx-auto">
-        <h3 class="text-xl sm:text-2xl font-semibold text-white mb-4">O Futuro é Adaptativo</h3>
-        <p class="text-gray-400 text-lg leading-relaxed">
-            Estamos a evoluir o Crypto Trader Pro de um painel de controle para um copiloto de investimentos. A integração profunda com a IA Gemini permitirá a automação de estratégias complexas, otimização contínua e a descoberta de oportunidades que seriam impercetíveis ao olho humano.
-        </p>
-    </div>
+    </section>
 </div>
 {% endblock %}

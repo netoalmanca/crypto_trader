@@ -2,75 +2,75 @@ Visão Geral do Projeto: Crypto Trader Pro
 1. Introdução
 O Crypto Trader Pro é uma plataforma de software completa, desenvolvida em Django, que evoluiu de um painel de controlo manual para um sofisticado sistema de trading de criptomoedas assistido por Inteligência Artificial. O seu core integra-se diretamente com a API da Binance para execução de ordens e recolha de dados de mercado em tempo real, enquanto utiliza a API do Google Gemini como o cérebro estratégico para análise de mercado, geração de sinais e otimização de estratégias.
 
-O objetivo do projeto é fornecer aos utilizadores uma ferramenta robusta que não só permite o controlo total sobre o seu portfólio, mas também oferece uma vantagem competitiva através da automação inteligente e adaptativa.
+O objetivo do projeto é fornecer aos utilizadores uma ferramenta robusta que não só permite o controlo total sobre o seu portfólio, mas também oferece uma vantagem competitiva através de um ciclo de automação e aprendizagem adaptativa.
 
 2. Arquitetura e Tecnologias
-Backend: Django 5.x, Python 3.10+, Gunicorn/Uvicorn
+A plataforma foi construída sobre uma base de tecnologias modernas e escaláveis, escolhidas para garantir performance, fiabilidade e segurança.
 
-Frontend: Templates Django, Tailwind CSS, JavaScript, Chart.js, Alpine.js
+Backend: Django, Python 3.10+, Gunicorn
+
+Tarefas Assíncronas: Celery, Redis
 
 Base de Dados: SQLite 3 (Desenvolvimento), PostgreSQL (Produção)
 
-Tarefas Assíncronas: Celery e Redis
+Frontend: Templates Django, Tailwind CSS, Alpine.js, Chart.js
 
-APIs Externas: Binance, Google Gemini, NewsAPI
+APIs Externas:
 
-Segurança: Criptografia de chaves via cryptography (Fernet + PBKDF2HMAC)
+Exchange: API da Binance (suporte para Mainnet e Testnet)
 
-3. Estrutura de Módulos (Aplicações Django)
-O projeto está organizado em duas aplicações principais para garantir a separação de responsabilidades: core e trading_agent.
+Inteligência Artificial: Google Gemini
 
-4. Fluxo de Decisão e Aprendizagem Adaptativa do Agente de IA
-O agente opera num ciclo contínuo e auto-otimizável.
+Notícias: NewsAPI (para análise de sentimento)
 
-Recolha de Dados (a cada 4 horas): Tarefas Celery recolhem indicadores técnicos e analisam o sentimento de notícias reais.
+Segurança: Criptografia de chaves de API com o algoritmo Fernet e KDF (PBKDF2HMAC) para proteger os dados sensíveis do utilizador.
 
-Ciclo de Decisão (a cada hora):
+3. Fluxo de Decisão e Aprendizagem Adaptativa do Agente de IA
+O agente opera num ciclo contínuo e auto-otimizável, orquestrado pelo Celery Beat.
 
-A tarefa run_trading_cycle_for_all_users recolhe o contexto histórico dos dados.
+Recolha de Dados (a cada hora):
 
-(FINAL) Prompt Adaptativo: O prompt enviado ao Gemini agora inclui uma secção de "Modificações de Estratégia Ativas", que é preenchida com as sugestões que o utilizador escolheu aplicar a partir do StrategyLog. Isto permite que a estratégia base da IA seja personalizada e evolua com o tempo.
+calculate_technical_indicators: Uma tarefa Celery que utiliza a biblioteca pandas-ta para calcular indicadores técnicos (RSI, MACD, Bandas de Bollinger, ATR).
 
-A resposta da IA é guardada como um TradingSignal.
+analyze_market_sentiment: Uma segunda tarefa que utiliza a NewsAPI para recolher as notícias mais recentes e, em seguida, usa o Gemini para realizar uma análise de sentimento, guardando o score e um resumo.
 
-Ciclo de Execução (a cada hora, 5 mins após decisão): Sinais de alta confiança são executados.
+Ciclo de Decisão (a cada 15 minutos):
+
+run_trading_cycle_for_all_users: Esta é a tarefa principal do "cérebro" do agente. Para cada utilizador com o agente ativo, ela:
+
+Recolhe o contexto histórico dos últimos dados de análise técnica e de sentimento.
+
+Constrói um Prompt Adaptativo: Envia um prompt ao Gemini que inclui não só os dados de mercado, mas também as regras de estratégia ativas que o próprio utilizador aplicou a partir de aprendizados passados.
+
+Gera um TradingSignal (Comprar, Vender ou Manter) com base na resposta da IA.
+
+Ciclo de Execução (a cada 15 minutos):
+
+process_unexecuted_signals: Procura por sinais pendentes e, se o score de confiança da IA for superior ao limiar definido pelo utilizador, executa a ordem na Binance.
 
 Ciclo de Aprendizagem (Semanalmente):
 
-A tarefa reflect_on_performance analisa os trades da última semana.
+reflect_on_performance: Uma tarefa semanal analisa todos os trades executados pelo agente, separando-os por lucros e prejuízos.
 
-A IA gera uma reflexão e sugestões de melhoria, que são guardadas num StrategyLog.
+Gera uma Reflexão: Envia um relatório de performance para o Gemini, que atua como um analista de risco, identifica padrões e sugere modificações concretas para a sua própria estratégia.
 
-(NOVO) Ciclo de Aplicação (Controlado pelo Utilizador):
+Regista o Aprendizado: As sugestões são guardadas num StrategyLog, criando um histórico da evolução do agente. O utilizador pode então aplicar estas sugestões através do "Gestor de Estratégia", fechando o ciclo de aprendizagem.
 
-Uma nova página, "Gestor de Estratégia", permite ao utilizador visualizar todos os StrategyLogs.
+4. Funcionalidades Implementadas
+Gestão de Conta e Segurança: Autenticação completa, perfil de utilizador, e página de configurações para chaves de API criptografadas e ambiente (Testnet/Mainnet).
 
-O utilizador pode ler a análise da IA e, com um botão "Aplicar Sugestão", pode fazer com que as modificações sugeridas se tornem a nova regra ativa para o seu agente, fechando o ciclo de feedback.
+Dashboard e Análise de Portfólio: Visão consolidada do valor do portfólio, gráficos de distribuição de ativos e histórico de valor.
 
-5. Funcionalidades Implementadas
-Gestão de Conta e Segurança Completa.
-
-Dashboard e Análise de Portfólio Detalhada.
-
-Trading Manual (Mercado e Limite).
+Trading Manual: Execução de ordens a Mercado e a Limite, e visualização/cancelamento de ordens abertas.
 
 Módulo do Agente de IA:
 
-Controlo Total (Ativar/Desativar, parâmetros de risco).
+Controlo Total do Utilizador: O utilizador pode ativar/desativar o agente e configurar os parâmetros de risco.
 
-Análise de Sentimento e Técnica com Contexto Histórico.
+Análise de Sentimento Real e Técnica: O agente baseia as suas decisões em dados de mercado e notícias reais.
 
-Ciclo de Aprendizagem Semanal com autoavaliação.
+Ciclo de Aprendizagem Adaptativo: O agente aprende com a sua performance passada e o utilizador pode aplicar estas melhorias.
 
-(NOVO) Gestor de Estratégia: Interface para o utilizador aplicar os aprendizados da IA, criando um agente verdadeiramente adaptativo e personalizado.
+Dashboard e Relatórios do Agente: Interfaces dedicadas para monitorizar o estado, histórico de decisões e performance financeira do agente.
 
-Dashboard do Agente, Relatórios de Performance e Ferramenta de Backtesting.
-
-6. Evolução Futura
-O projeto atingiu um estado de maturidade com um ciclo de feedback completo. Os próximos passos concentram-se na expansão e refinamento:
-
-Expandir Fontes de Dados: Integrar dados on-chain ou de sentimento de redes sociais.
-
-Backtesting Comparativo: Permitir ao utilizador simular o desempenho de diferentes versões da estratégia salvas no StrategyLog.
-
-Suporte a Mais Ativos: Expandir a lógica do agente para operar com outros criptoativos além do BTC.
+Ferramenta de Backtesting: Permite ao utilizador simular a performance da estratégia da IA em dados históricos.

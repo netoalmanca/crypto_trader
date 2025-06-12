@@ -1,67 +1,114 @@
-# Crypto Trader Pro com Agente de IA (Gemini)
+Crypto Trader Pro com Agente de IA (Gemini)
+🚀 Sobre o Projeto
+O Crypto Trader Pro é uma plataforma avançada de trading de criptomoedas, desenvolvida em Django, que transforma a gestão de ativos digitais através da automação inteligente. A aplicação integra-se diretamente com a API da Binance para dados de mercado e execução de ordens, e utiliza o poder da API Google Gemini como um cérebro estratégico para:
 
-Este é um projeto Django que cria uma plataforma avançada de gerenciamento e negociação de criptomoedas, utilizando a API da Binance para dados de mercado e transações, e o poder do Google Gemini para análise estratégica e geração de sinais de trading.
+Análise de indicadores técnicos.
 
-## Funcionalidades
+Análise de sentimento de mercado com base em notícias reais.
 
-* **Autenticação Completa de Usuários:** Registro, login, logout e gerenciamento de perfil.
-* **Conectividade Segura com a Binance:** Armazenamento seguro de chaves API com criptografia forte e seleção de ambiente (Testnet/Mainnet).
-* **Dashboard Analítico:**
-    * Visualização do valor total do portfólio em tempo real.
-    * Gráficos interativos com a distribuição de ativos e histórico de valor.
-    * Tabela de posses com cálculo de Lucro/Prejuízo.
-* **Negociação Manual Completa:**
-    * Execução de ordens de **Compra e Venda a Mercado**.
-    * Criação de ordens de **Compra e Venda a Limite**.
-    * Visualização e cancelamento de ordens abertas.
-* **Recursos Inteligentes (Gemini API):**
-    * **"Explique este Ativo"**: Análise de criptomoedas sob demanda nas páginas de detalhe.
-    * **Análise de Sentimento de Mercado**: Tarefas em segundo plano que analisam notícias e geram scores de sentimento.
+Geração de sinais de trading (Compra/Venda/Manter).
 
-## Próximo Grande Passo: Agente de Trading Autônomo
+Ciclo de aprendizagem adaptativo, onde o agente aprende com a sua própria performance.
 
-A fase atual de desenvolvimento está focada em construir um **agente de trading semi ou totalmente autônomo**, transformando a plataforma em uma ferramenta de nível profissional.
+✨ Funcionalidades Principais
+Dashboard Analítico: Visualize o seu portfólio, a distribuição de ativos e o histórico de valor com gráficos interativos.
 
-1.  **Módulo de Análise de Dados**: Implementar tarefas assíncronas (Celery) para calcular e salvar continuamente indicadores de **análise técnica** (RSI, MACD, Bandas de Bollinger) e **sentimento de mercado** (via Gemini).
+Agente de IA Adaptativo: Um agente autónomo que opera 24/7, aprende com os seus resultados e permite que o utilizador aplique as suas sugestões de melhoria.
 
-2.  **Cérebro de Decisão (Gemini Core)**: Desenvolver um ciclo de decisão onde os dados coletados são enviados ao Gemini para obter um **sinal de trade completo** (Comprar/Vender/Manter, score de confiança, sugestões de stop-loss/take-profit e justificativa).
+Gestor de Estratégia: Interface para gerir e aplicar os aprendizados da IA, personalizando o comportamento do agente.
 
-3.  **Interface de Controle do Agente**: Criar uma nova seção no app onde o usuário poderá **ativar/desativar** o agente, configurar seu perfil de risco e visualizar o histórico de decisões tomadas pela IA.
+Trading Manual e via API: Execute ordens a mercado ou a limite diretamente pela interface.
 
-4.  **Execução Automatizada**: Conectar os sinais de alta confiança do agente diretamente com a API da Binance para a execução de ordens.
+Segurança: As chaves de API são armazenadas com criptografia forte, garantindo a segurança dos seus dados.
 
-## Configuração do Ambiente
+Backtesting de Estratégias: Simule a performance da estratégia da IA contra dados históricos para validar a sua eficácia.
 
-### Pré-requisitos
-* Python 3.10+
-* Pip e Virtualenv
-* Redis
-* **Bibliotecas Adicionais:** `pandas-ta`
+📸 Demonstração (Screenshots)
+Dashboard Principal
 
-### Passos para Configuração
-1.  **Clone o repositório.**
+Dashboard do Agente de IA
 
-2.  **Crie e ative um ambiente virtual.**
+Gestor de Estratégia
 
-3.  **Instale as dependências:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+Relatório de Performance do Agente
 
-4.  **Configure as variáveis de ambiente:**
-    * Copie o arquivo `.env.example` para `.env`.
-    * Preencha as variáveis, incluindo `DJANGO_SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, suas chaves da **API da Binance** e sua chave da **API do Gemini** (`GEMINI_API_KEY`).
+Backtesting
 
-5.  **Execute as migrações e crie um superusuário.**
-    ```bash
-    python manage.py migrate
-    python manage.py createsuperuser
-    ```
+Histórico de Transações
 
-6.  **Inicie os serviços (em terminais separados):**
-    * **Servidor Django:** `python manage.py runserver`
-    * **Celery Worker:** `celery -A crypto_trader worker -l info`
-    * **Celery Beat (Agendador):** `celery -A crypto_trader beat -l info`
+🛠️ Tecnologias Utilizadas
+O projeto foi construído com as seguintes tecnologias:
 
-A aplicação estará disponível em `http://127.0.0.1:8000/`.
+Backend: Django, Django REST Framework, Celery
 
+Frontend: Templates Django, Tailwind CSS, Alpine.js, Chart.js
+
+Base de Dados: SQLite 3 (Desenvolvimento), PostgreSQL (Produção)
+
+Cache e Mensageria: Redis
+
+APIs Externas: Google Gemini, Binance, NewsAPI
+
+Conteinerização: Docker, Docker Compose
+
+⚙️ Configuração e Execução
+Siga os passos abaixo para configurar e executar o projeto no seu ambiente local.
+
+Pré-requisitos
+Python 3.10+
+
+Docker e Docker Compose
+
+Git
+
+1. Clonar o Repositório
+git clone <URL_DO_SEU_REPOSITORIO>
+cd <NOME_DO_PROJETO>
+
+2. Configurar Variáveis de Ambiente
+Copie o ficheiro .env.example para .env:
+
+cp .env.example .env
+
+Edite o ficheiro .env e preencha todas as variáveis necessárias, incluindo as suas chaves de API para Binance, Google Gemini e NewsAPI.
+
+3. Executar com Docker Compose
+Este é o método recomendado para o ambiente de desenvolvimento, pois gere todos os serviços (web, workers, redis) automaticamente.
+
+Construir e iniciar os contentores:
+
+docker-compose up --build -d
+
+Executar as migrações da base de dados (apenas na primeira vez):
+
+docker-compose exec web python manage.py migrate
+
+Criar um superutilizador (opcional):
+
+docker-compose exec web python manage.py createsuperuser
+
+A aplicação estará disponível em http://127.0.0.1:8000.
+
+4. Execução Local (Sem Docker)
+Instale as dependências:
+
+pip install -r requirements.txt
+
+Execute as migrações e crie um superutilizador:
+
+python manage.py migrate
+python manage.py createsuperuser
+
+Inicie os serviços (em terminais separados):
+
+# Terminal 1: Servidor Redis
+redis-server
+
+# Terminal 2: Servidor Django
+python manage.py runserver
+
+# Terminal 3: Celery Worker
+celery -A crypto_trader worker -l info
+
+# Terminal 4: Celery Beat (Agendador)
+celery -A crypto_trader beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
