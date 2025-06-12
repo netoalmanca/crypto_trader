@@ -1,0 +1,27 @@
+# Ficheiros do Git
+.git
+.gitignore
+
+# Ficheiros de ambiente virtual
+venv/
+.venv/
+
+# Ficheiros de cache do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ficheiros de configuração local e segredos
+.env
+*.env.*
+*.sqlite3
+*.sqlite3-journal
+
+# Ficheiros do Docker
+Dockerfile
+docker-compose.yml
+
+# Ficheiros de IDE
+.idea/
+.vscode/
