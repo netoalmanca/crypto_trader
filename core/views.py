@@ -13,8 +13,8 @@ import time
 import json
 import datetime
 from django.db import transaction as db_transaction
-from django.db.models import Sum
-from decimal import Decimal, ROUND_DOWN
+from django.db.models import Sum, Q
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 from .forms import (
     CustomUserCreationForm, CustomAuthenticationForm, UserProfileAPIForm,
@@ -51,7 +51,6 @@ def get_binance_client(user_profile=None):
         server_time = client.get_server_time()
         time_offset = server_time['serverTime'] - int(time.time() * 1000)
         client.timestamp_offset = time_offset
-        print(f"Cliente Binance sincronizado. Offset de tempo: {time_offset}ms")
     except requests.exceptions.RequestException as e:
         print(f"Aviso: Não foi possível sincronizar o tempo com a Binance. Erro: {e}")
 
@@ -71,41 +70,166 @@ def adjust_price_to_tick_size(price_str, tick_size_str):
     quotient = (price / tick_size).to_integral_value(rounding=ROUND_DOWN)
     return (quotient * tick_size).quantize(Decimal('1e-' + str(precision)))
 
-@db_transaction.atomic
-def recalculate_holdings(user_profile):
-    Holding.objects.filter(user_profile=user_profile).delete()
-    transacted_cryptos = Cryptocurrency.objects.filter(transactions__user_profile=user_profile).distinct()
+def _create_todays_snapshot(user_profile):
+    """
+    Cria ou atualiza o snapshot do portfólio para o dia atual para um usuário específico.
+    """
+    today = timezone.now().date()
+    print(f"A criar/atualizar snapshot para {user_profile.user.username} para a data {today}")
+
+    exchange_rates = {rate.to_currency: rate.rate for rate in ExchangeRate.objects.filter(from_currency=BASE_RATE_CURRENCY)}
+    exchange_rates[BASE_RATE_CURRENCY] = Decimal('1.0')
     
-    for crypto in transacted_cryptos:
-        buys = Transaction.objects.filter(user_profile=user_profile, cryptocurrency=crypto, transaction_type='BUY').aggregate(total_qty=Sum('quantity_crypto', default=Decimal('0.0')), total_cost=Sum('total_value', default=Decimal('0.0')))
-        sells = Transaction.objects.filter(user_profile=user_profile, cryptocurrency=crypto, transaction_type='SELL').aggregate(total_qty=Sum('quantity_crypto', default=Decimal('0.0')))
-        total_qty_bought = buys.get('total_qty') or Decimal('0.0')
-        total_cost_of_buys = buys.get('total_cost') or Decimal('0.0')
-        total_qty_sold = sells.get('total_qty') or Decimal('0.0')
-        final_quantity = total_qty_bought - total_qty_sold
-        if final_quantity > Decimal('0.00000001'):
-            avg_price = (total_cost_of_buys / total_qty_bought) if total_qty_bought > 0 else Decimal('0.0')
-            Holding.objects.create(user_profile=user_profile, cryptocurrency=crypto, quantity=final_quantity, average_buy_price=avg_price)
+    pref_currency = user_profile.preferred_fiat_currency
+    rate_to_pref_currency = exchange_rates.get(pref_currency)
+
+    if not rate_to_pref_currency:
+        print(f"Aviso: Taxa de câmbio para {pref_currency} não encontrada para o usuário {user_profile.user.username}. Snapshot não criado.")
+        return
+
+    total_portfolio_value = Decimal('0.0')
+    holdings = Holding.objects.filter(user_profile=user_profile, quantity__gt=0)
+    for holding in holdings:
+        if holding.current_market_value is not None:
+            total_portfolio_value += holding.current_market_value * rate_to_pref_currency
+    
+    PortfolioSnapshot.objects.update_or_create(
+        user_profile=user_profile,
+        date=today,
+        defaults={
+            'total_value': total_portfolio_value,
+            'currency': pref_currency,
+        }
+    )
+    print(f"Snapshot salvo para {user_profile.user.username}: {total_portfolio_value} {pref_currency}")
+
+
+@db_transaction.atomic
+def recalculate_holdings(user_profile, request=None):
+    """
+    (VERSÃO FINAL) Limpa e recalcula as posses.
+    1. Usa a API da Binance para obter o SALDO ATUAL (quantidade) de cada ativo.
+    2. Usa o HISTÓRICO DE TRADES para calcular o PREÇO MÉDIO de compra.
+    """
+    print(f"--- INÍCIO DO RECÁLCULO (v5) para {user_profile.user.username} ---")
+    
+    client = get_binance_client(user_profile)
+    if not client:
+        if request:
+            messages.error(request, "Não foi possível conectar à Binance para recalcular as posses. Verifique suas chaves de API.")
+        print("Erro: Cliente Binance não pôde ser criado.")
+        return
+
+    Holding.objects.filter(user_profile=user_profile).delete()
+    print("Posses antigas eliminadas.")
+
+    try:
+        account_info = client.get_account()
+        balances = {item['asset']: Decimal(item['free']) for item in account_info.get('balances', []) if Decimal(item['free']) > 0}
+        print(f"Saldos obtidos da Binance: {balances}")
+    except BinanceAPIException as e:
+        if request:
+            messages.error(request, f"Erro ao obter saldos da Binance: {e.message}")
+        print(f"Erro na API ao obter saldos: {e}")
+        return
+
+    crypto_symbols_with_balance = list(balances.keys())
+    relevant_cryptos = Cryptocurrency.objects.filter(symbol__in=crypto_symbols_with_balance)
+
+    if not relevant_cryptos.exists():
+        print("Nenhuma cripto com saldo positivo encontrada na conta da Binance.")
+        print(f"--- FIM DO RECÁLCULO (v5) ---")
+        return
+        
+    print(f"Criptos com saldo na Binance: {[c.symbol for c in relevant_cryptos]}")
+
+    for crypto in relevant_cryptos:
+        symbol = crypto.symbol
+        current_quantity = balances.get(symbol, Decimal('0.0'))
+        
+        print(f"\nA processar {symbol}:")
+        print(f"  - Saldo atual da API: {current_quantity}")
+
+        buys_data = Transaction.objects.filter(
+            user_profile=user_profile, cryptocurrency=crypto, transaction_type='BUY'
+        ).aggregate(
+            total_qty=Sum('quantity_crypto', default=Decimal('0.0')),
+            total_cost=Sum('total_value', default=Decimal('0.0'))
+        )
+        
+        total_qty_bought = buys_data['total_qty']
+        total_cost_of_buys = buys_data['total_cost']
+
+        avg_price = (total_cost_of_buys / total_qty_bought) if total_qty_bought > 0 else Decimal('0.0')
+
+        print(f"  - Total histórico de compras: Qtd={total_qty_bought}, Custo={total_cost_of_buys}")
+        print(f"  - Preço médio de compra calculado: {avg_price}")
+        
+        Holding.objects.create(
+            user_profile=user_profile,
+            cryptocurrency=crypto,
+            quantity=current_quantity,
+            average_buy_price=avg_price
+        )
+        print(f"  -> SUCESSO: Nova posse para {crypto.symbol} criada. Qtd={current_quantity}, Preço Médio={avg_price}")
+            
+    print(f"--- FIM DO RECÁLCULO (v5) ---")
 
 @db_transaction.atomic
 def _process_successful_order(user_profile, order_response, crypto, signal=None):
     if not order_response or not order_response.get('fills'):
         raise ValueError("A resposta da ordem da Binance não continha 'fills' para processar.")
-    transaction_type, order_id = order_response.get('side'), str(order_response.get('orderId'))
-    total_quantity_crypto = sum(Decimal(f['qty']) for f in order_response['fills'])
-    total_value_quote = sum(Decimal(f['price']) * Decimal(f['qty']) for f in order_response['fills'])
-    total_fees = sum(Decimal(f['commission']) for f in order_response['fills'])
-    fee_currency = order_response['fills'][0]['commissionAsset'] if order_response['fills'] else ''
-    if total_quantity_crypto == 0: return
-    average_price = total_value_quote / total_quantity_crypto
-    Transaction.objects.create(
-        user_profile=user_profile, cryptocurrency=crypto, transaction_type=transaction_type,
-        quantity_crypto=total_quantity_crypto, price_per_unit=average_price,
-        total_value=total_value_quote, fees=total_fees,
-        transaction_date=datetime.datetime.fromtimestamp(order_response['transactTime'] / 1000, tz=datetime.timezone.utc),
-        binance_order_id=order_id, notes=f"Ordem a mercado executada. Taxas pagas em {fee_currency}.", signal=signal
-    )
+    
+    order_id = str(order_response.get('orderId'))
+    
+    for fill in order_response.get('fills', []):
+        trade_id = str(fill.get('tradeId'))
+        
+        Transaction.objects.update_or_create(
+            user_profile=user_profile,
+            binance_order_id=trade_id,
+            defaults={
+                'cryptocurrency': crypto,
+                'transaction_type': order_response.get('side'),
+                'quantity_crypto': Decimal(fill['qty']),
+                'price_per_unit': Decimal(fill['price']),
+                'total_value': Decimal(fill['qty']) * Decimal(fill['price']),
+                'fees': Decimal(fill['commission']),
+                'transaction_date': datetime.datetime.fromtimestamp(order_response['transactTime'] / 1000, tz=datetime.timezone.utc),
+                'notes': f"Ordem executada via app (OrderID: {order_id}). Taxas pagas em {fill.get('commissionAsset')}.",
+                'signal': signal
+            }
+        )
+    
     recalculate_holdings(user_profile)
+    _update_crypto_prices_for_profile(user_profile)
+    _create_todays_snapshot(user_profile)
+
+
+def _update_crypto_prices_for_profile(user_profile):
+    client = get_binance_client()
+    if not client:
+        print("Não foi possível criar um cliente Binance genérico para atualizar os preços.")
+        return
+
+    held_cryptos = Cryptocurrency.objects.filter(held_by_users__user_profile=user_profile).distinct()
+    
+    if not held_cryptos.exists():
+        print("Nenhuma posse encontrada para atualizar preços.")
+        return
+
+    print(f"Atualizando preços para {held_cryptos.count()} criptos de {user_profile.user.username}...")
+    for crypto in held_cryptos:
+        api_symbol_pair = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
+        try:
+            ticker_data = client.get_ticker(symbol=api_symbol_pair)
+            if ticker_data and 'lastPrice' in ticker_data:
+                crypto.current_price = Decimal(ticker_data['lastPrice'])
+                crypto.last_updated = timezone.now()
+                crypto.save(update_fields=['current_price', 'last_updated'])
+        except (BinanceAPIException, InvalidOperation) as e:
+            print(f"Erro ao atualizar o preço para {api_symbol_pair}: {e}")
+
 
 # --- Views ---
 def index_view(request):
@@ -209,35 +333,33 @@ def reset_portfolio_view(request):
 @login_required
 def recalculate_holdings_view(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
-    recalculate_holdings(user_profile)
-    messages.success(request, 'Seu portfólio foi recalculado com sucesso!')
+    recalculate_holdings(user_profile, request)
+    _update_crypto_prices_for_profile(user_profile)
+    _create_todays_snapshot(user_profile)
+    messages.success(request, 'Seu portfólio foi recalculado e os preços foram atualizados com sucesso!')
     return redirect('core:dashboard')
 
 @login_required
 def cryptocurrency_list_view(request):
     client = get_binance_client()
-    if not client:
-        messages.error(request, "Não foi possível conectar à Binance para obter dados de mercado.")
-        return render(request, 'core/cryptocurrency_list.html', {'cryptocurrencies_page': []})
     cryptos_from_db = Cryptocurrency.objects.all().order_by('name')
     enriched_cryptos_data = []
-    for crypto in cryptos_from_db:
-        data = {'db_instance': crypto}
-        try:
-            ticker_24h = client.get_ticker(symbol=f"{crypto.symbol.upper()}{crypto.price_currency.upper()}")
-            data.update({'price_change_percent_24h': Decimal(ticker_24h.get('priceChangePercent', '0'))})
-        except BinanceAPIException:
-            data.update({'price_change_percent_24h': None})
-        enriched_cryptos_data.append(data)
-    paginator, page_number = Paginator(enriched_cryptos_data, 20), request.GET.get('page')
-    try:
-        cryptocurrencies_page = paginator.page(page_number)
-    except PageNotAnInteger:
-        cryptocurrencies_page = paginator.page(1)
-    except EmptyPage:
-        cryptocurrencies_page = paginator.page(paginator.num_pages)
-    return render(request, 'core/cryptocurrency_list.html', {'page_title': 'Lista de Criptomoedas', 'cryptocurrencies_page': cryptocurrencies_page})
+    if client:
+        for crypto in cryptos_from_db:
+            data = {'db_instance': crypto}
+            try:
+                ticker_24h = client.get_ticker(symbol=f"{crypto.symbol.upper()}{crypto.price_currency.upper()}")
+                data.update({'price_change_percent_24h': Decimal(ticker_24h.get('priceChangePercent', '0'))})
+            except BinanceAPIException:
+                data.update({'price_change_percent_24h': None})
+            enriched_cryptos_data.append(data)
+    else:
+         messages.error(request, "Não foi possível conectar à Binance para obter dados de mercado.")
 
+    paginator = Paginator(enriched_cryptos_data, 20)
+    page_number = request.GET.get('page')
+    cryptocurrencies_page = paginator.get_page(page_number)
+    return render(request, 'core/cryptocurrency_list.html', {'page_title': 'Lista de Criptomoedas', 'cryptocurrencies_page': cryptocurrencies_page})
 
 @login_required
 def cryptocurrency_detail_view(request, symbol):
@@ -259,83 +381,42 @@ def cryptocurrency_detail_view(request, symbol):
     context = {'page_title': f"Detalhes de {crypto.name}", 'crypto': crypto, 'klines_data_json': klines_data_json, 'chart_error_message': chart_error_message}
     return render(request, 'core/cryptocurrency_detail.html', context)
 
-
 @login_required
 def explain_crypto_with_ai_view(request):
-    """
-    (CORRIGIDO E ROBUSTO) View de API para obter uma explicação sobre uma criptomoeda.
-    Tenta usar o modelo `gemini-2.0-flash` primeiro e depois outros como fallback.
-    """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Apenas o método POST é permitido'}, status=405)
-    
-    try:
-        data = json.loads(request.body)
-        crypto_name = data.get('crypto_name')
-        if not crypto_name:
-            return JsonResponse({'error': 'Nome da criptomoeda não fornecido no pedido.'}, status=400)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Corpo do pedido em formato JSON inválido.'}, status=400)
-
-    gemini_api_key = settings.GEMINI_API_KEY
-    if not gemini_api_key:
-        return JsonResponse({'error': 'A chave da API do Gemini não foi configurada no servidor.'}, status=500)
-
-    prompt = f"Explique de forma simples e concisa para um iniciante o que é a criptomoeda {crypto_name} e qual o seu principal propósito ou caso de uso. Responda em português do Brasil."
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    headers = {'Content-Type': 'application/json'}
-
-    # (ATUALIZADO) Lista de modelos a tentar, com o preferido primeiro.
-    models_to_try = [
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-pro"
-    ]
-
-    for model_name in models_to_try:
-        # (ATUALIZADO) Usa o endpoint de API apropriado para cada tipo de modelo.
-        if model_name == "gemini-pro":
-            api_url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={gemini_api_key}"
-        else:
-            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_api_key}"
-        
-        print(f"Tentando obter explicação com o modelo: {model_name} no endpoint: {api_url}")
-        
+    if request.method == 'POST':
         try:
-            response = requests.post(api_url, json=payload, headers=headers, timeout=25)
-            response.raise_for_status() 
+            data = json.loads(request.body)
+            crypto_name = data.get('crypto_name')
+            if not crypto_name:
+                return JsonResponse({'error': 'Nome da criptomoeda não fornecido.'}, status=400)
+
+            gemini_api_key = settings.GEMINI_API_KEY
+            if not gemini_api_key or gemini_api_key == "SUA_CHAVE_GEMINI":
+                return JsonResponse({'error': 'A chave da API Gemini não está configurada no servidor.'}, status=500)
+
+            prompt = f"Aja como um especialista em criptomoedas. Explique o que é {crypto_name}, qual o seu propósito principal, e um ponto positivo e um negativo sobre o projeto. Seja claro e direto, em um parágrafo."
+            
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_api_key}"
+            headers = {'Content-Type': 'application/json'}
+            payload = {'contents': [{'parts': [{'text': prompt}]}]}
+
+            response = requests.post(api_url, headers=headers, json=payload, timeout=20)
+            response.raise_for_status()
+            
             result = response.json()
-
-            if "candidates" in result and result.get("candidates"):
-                candidate = result["candidates"][0]
-                if "content" in candidate and "parts" in candidate["content"] and candidate["content"].get("parts"):
-                    text = candidate["content"]["parts"][0].get("text")
-                    if text:
-                        return JsonResponse({'explanation': text})
+            explanation = result['candidates'][0]['content']['parts'][0]['text']
             
-            return JsonResponse({'error': f'Resposta da API do Gemini ({model_name}) em formato inesperado.', 'api_response': result }, status=500)
+            return JsonResponse({'explanation': explanation})
 
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 503 and model_name != models_to_try[-1]:
-                print(f"Modelo {model_name} indisponível (503). Tentando fallback...")
-                continue
-            else:
-                try:
-                    error_body = e.response.json()
-                    error_message = error_body.get('error', {}).get('message', str(e))
-                except json.JSONDecodeError:
-                    error_message = e.response.text
-                print(f"Erro HTTP da API Gemini ({model_name}): {error_message}")
-                return JsonResponse({'error': f'Erro da API do Gemini: {error_message}'}, status=e.response.status_code)
-        except requests.exceptions.Timeout:
-            return JsonResponse({'error': f'O pedido para a API do Gemini ({model_name}) demorou demasiado tempo (timeout).'}, status=504)
         except requests.exceptions.RequestException as e:
-            return JsonResponse({'error': f'Erro de comunicação com a API do Gemini: {e}'}, status=502)
+            return JsonResponse({'error': f'Erro de rede ao contatar a API Gemini: {e}'}, status=502)
+        except (KeyError, IndexError) as e:
+            return JsonResponse({'error': 'Resposta inesperada da API Gemini. Tente novamente.'}, status=500)
         except Exception as e:
-            return JsonResponse({'error': f'Ocorreu um erro inesperado no servidor: {e}'}, status=500)
-            
-    # Se todos os modelos da lista falharem
-    return JsonResponse({'error': 'Todos os modelos da IA estão indisponíveis no momento.'}, status=503)
+            return JsonResponse({'error': f'Ocorreu um erro inesperado: {e}'}, status=500)
+
+    return JsonResponse({'error': 'Método não permitido'}, status=405)
+
 
 @login_required
 def open_orders_view(request):
@@ -369,13 +450,8 @@ def transaction_history_view(request):
     transaction_list = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
     paginator = Paginator(transaction_list, 15) 
     page_number = request.GET.get('page')
-    try:
-        transactions_page = paginator.page(page_number)
-    except PageNotAnInteger:
-        transactions_page = paginator.page(1)
-    except EmptyPage:
-        transactions_page = paginator.page(paginator.num_pages)
-    return render(request, 'core/transaction_history.html', {'transactions_page': transactions_page, 'page_title': 'Histórico de Transações'})
+    transactions_page = paginator.get_page(page_number)
+    return render(request, 'core/transaction_history.html', {'page_title': 'Histórico de Transações', 'transactions_page': transactions_page})
 
 @login_required
 def export_transactions_csv_view(request):
@@ -396,7 +472,9 @@ def add_transaction_view(request):
     form = TransactionForm(request.POST or None, user_profile=user_profile)
     if request.method == 'POST' and form.is_valid():
         tx = form.save(commit=False); tx.user_profile = user_profile; tx.save()
-        recalculate_holdings(user_profile)
+        recalculate_holdings(user_profile, request)
+        _update_crypto_prices_for_profile(user_profile)
+        _create_todays_snapshot(user_profile)
         messages.success(request, "Transação manual registrada e portfólio recalculado!")
         return redirect('core:dashboard')
     return render(request, 'core/add_transaction.html', {'form': form, 'page_title': 'Adicionar Transação Manual'})
@@ -409,25 +487,88 @@ def sync_binance_trades_view(request):
     if not client:
         messages.error(request, "Chaves API inválidas ou não configuradas para sincronizar.")
         return redirect('core:transaction_history')
-    existing_trade_ids = set(note.split("Trade ID: ")[1] for note in Transaction.objects.filter(user_profile=user_profile, notes__icontains="Trade ID:").values_list('notes', flat=True) if "Trade ID: " in note)
-    all_db_cryptos, new_trades_count = Cryptocurrency.objects.all(), 0
+
+    print("--- INÍCIO DA SINCRONIZAÇÃO COMPLETA COM A BINANCE ---")
+    
+    existing_trade_ids = set(Transaction.objects.filter(
+        user_profile=user_profile, 
+        binance_order_id__isnull=False
+    ).values_list('binance_order_id', flat=True))
+    print(f"Encontrados {len(existing_trade_ids)} IDs de trades já existentes no banco de dados.")
+
+    all_db_cryptos = Cryptocurrency.objects.all()
+    total_new_trades_count = 0
+
     for crypto in all_db_cryptos:
         api_symbol = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
-        try:
-            trades = client.get_my_trades(symbol=api_symbol, limit=500)
-            for trade in trades:
-                trade_id = str(trade['id'])
-                if trade_id not in existing_trade_ids:
-                    Transaction.objects.create(user_profile=user_profile, cryptocurrency=crypto, transaction_type='BUY' if trade['isBuyer'] else 'SELL', quantity_crypto=Decimal(trade['qty']), price_per_unit=Decimal(trade['price']), fees=Decimal(trade['commission']), binance_order_id=str(trade['orderId']), transaction_date=datetime.datetime.fromtimestamp(trade['time'] / 1000, tz=datetime.timezone.utc), notes=f"Sincronizado da Binance. Trade ID: {trade_id}")
-                    new_trades_count += 1
-        except BinanceAPIException as e:
-            if e.code != -1121: messages.warning(request, f"Aviso ao sincronizar {api_symbol}: {e.message}")
-        except Exception as e: messages.error(request, f"Erro inesperado ao sincronizar {api_symbol}: {e}")
-    if new_trades_count > 0:
-        recalculate_holdings(user_profile)
-        messages.success(request, f"{new_trades_count} nova(s) transação(ões) foram sincronizadas!")
-    else: messages.info(request, "Nenhuma nova transação encontrada.")
+        print(f"\nSincronizando histórico para o par: {api_symbol}")
+        
+        last_trade_id = 0
+        
+        while True:
+            try:
+                trades = client.get_my_trades(symbol=api_symbol, fromId=last_trade_id, limit=1000)
+
+                if not trades:
+                    print(f"Nenhum trade novo encontrado para {api_symbol} a partir do ID {last_trade_id}. Fim da sincronização para este par.")
+                    break
+
+                new_trades_in_batch = 0
+                for trade in trades:
+                    trade_id_str = str(trade['id'])
+                    
+                    if trade_id_str not in existing_trade_ids:
+                        Transaction.objects.update_or_create(
+                            user_profile=user_profile,
+                            binance_order_id=trade_id_str,
+                            defaults={
+                                'cryptocurrency': crypto, 
+                                'transaction_type': 'BUY' if trade['isBuyer'] else 'SELL', 
+                                'quantity_crypto': Decimal(trade['qty']), 
+                                'price_per_unit': Decimal(trade['price']), 
+                                'fees': Decimal(trade['commission']), 
+                                'transaction_date': datetime.datetime.fromtimestamp(trade['time'] / 1000, tz=datetime.timezone.utc), 
+                                'notes': f"Sincronizado da Binance. Trade ID: {trade_id_str}"
+                            }
+                        )
+                        existing_trade_ids.add(trade_id_str)
+                        new_trades_in_batch += 1
+                
+                if new_trades_in_batch > 0:
+                    print(f"  -> {new_trades_in_batch} novas transações salvas neste lote.")
+                    total_new_trades_count += new_trades_in_batch
+
+                last_trade_id = trades[-1]['id'] + 1
+                
+                if len(trades) < 1000:
+                    print(f"Fim do histórico para {api_symbol} alcançado.")
+                    break
+                
+                time.sleep(0.5)
+
+            except BinanceAPIException as e:
+                if e.code != -1121:
+                    messages.warning(request, f"Aviso ao sincronizar {api_symbol}: {e.message}")
+                else:
+                    print(f"Nenhum histórico de trade encontrado para {api_symbol}.")
+                break
+            except Exception as e:
+                messages.error(request, f"Erro inesperado ao sincronizar {api_symbol}: {e}")
+                break
+
+    print(f"\n--- FIM DA SINCRONIZAÇÃO ---")
+    
+    if total_new_trades_count > 0:
+        messages.success(request, f"{total_new_trades_count} nova(s) transação(ões) foram sincronizadas. O portfólio será recalculado.")
+    else:
+        messages.info(request, "Nenhuma nova transação encontrada. Recalculando portfólio com os dados existentes.")
+    
+    recalculate_holdings(user_profile, request)
+    _update_crypto_prices_for_profile(user_profile)
+    _create_todays_snapshot(user_profile)
+        
     return redirect('core:transaction_history')
+
 
 @login_required
 def trade_market_buy_view(request):
@@ -498,7 +639,7 @@ def trade_limit_buy_view(request):
             messages.success(request, f"Ordem limite de COMPRA enviada! ID: {order['orderId']}")
             return redirect('core:open_orders')
         except (BinanceAPIException, ValueError, ExchangeRate.DoesNotExist) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
-    return render(request, 'core/trade_limit_buy.html', {'form': form, 'page_title': "Comprar com Ordem Limite"})
+    return render(request, 'core/trade_limit_buy.html', {'page_title': "Comprar com Ordem Limite"})
 
 @login_required
 def trade_limit_sell_view(request):
@@ -521,4 +662,4 @@ def trade_limit_sell_view(request):
             messages.success(request, f"Ordem limite de VENDA enviada! ID: {order['orderId']}")
             return redirect('core:open_orders')
         except (BinanceAPIException, ValueError, ExchangeRate.DoesNotExist) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
-    return render(request, 'core/trade_limit_sell.html', {'form': form, 'page_title': "Vender com Ordem Limite"})
+    return render(request, 'core/trade_limit_sell.html', {'page_title': "Vender com Ordem Limite"})

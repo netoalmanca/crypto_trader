@@ -117,8 +117,8 @@ def process_unexecuted_signals():
 @shared_task(name="trading_agent.tasks.reflect_on_performance")
 def reflect_on_performance():
     """
-    (NOVO) Tarefa semanal que analisa a performance passada do agente e pede
-    sugestões de melhoria para a IA.
+    (CORRIGIDO) Tarefa semanal que analisa a performance passada do agente e pede
+    sugestões de melhoria para a IA, usando um cálculo de P/L mais preciso.
     """
     print("Iniciando ciclo de reflexão de performance semanal...")
     end_date = timezone.now()
@@ -127,7 +127,6 @@ def reflect_on_performance():
     active_profiles = UserProfile.objects.filter(enable_auto_trading=True)
 
     for profile in active_profiles:
-        # Busca todas as transações de COMPRA e VENDA do agente no período
         agent_trades = Transaction.objects.filter(
             user_profile=profile,
             signal__isnull=False,
@@ -138,30 +137,48 @@ def reflect_on_performance():
             print(f"Nenhum trade do agente para {profile.user.username} na última semana. Pulando reflexão.")
             continue
 
-        # Calcula o P/L para cada trade (simplificado)
-        performance_data = []
-        total_pl = Decimal('0.0')
-        win_count = 0
-
-        # Agrupa por ativo
         trades_by_crypto = {}
         for trade in agent_trades:
             if trade.cryptocurrency.symbol not in trades_by_crypto:
                 trades_by_crypto[trade.cryptocurrency.symbol] = []
             trades_by_crypto[trade.cryptocurrency.symbol].append(trade)
 
+        performance_data = []
+        total_pl = Decimal('0.0')
+        win_count = 0
+
         for symbol, trades in trades_by_crypto.items():
-            buys = sum(t.total_value for t in trades if t.transaction_type == 'BUY')
-            sells = sum(t.total_value for t in trades if t.transaction_type == 'SELL')
-            crypto_pl = sells - buys
-            total_pl += crypto_pl
-            if crypto_pl > 0:
+            crypto = trades[0].cryptocurrency
+
+            buy_cost = sum(t.total_value for t in trades if t.transaction_type == 'BUY')
+            sell_revenue = sum(t.total_value for t in trades if t.transaction_type == 'SELL')
+
+            # P/L Mark-to-Market para o período
+            # Lucro/Prejuízo = (Saídas de Caixa) - (Entradas de Caixa)
+            net_cash_flow = sell_revenue - buy_cost
+            
+            # Pega o preço atual para valorizar qualquer posição remanescente
+            # (uma tarefa Celery deve manter os preços atualizados)
+            current_price = crypto.current_price or Decimal('0')
+
+            buy_qty = sum(t.quantity_crypto for t in trades if t.transaction_type == 'BUY')
+            sell_qty = sum(t.quantity_crypto for t in trades if t.transaction_type == 'SELL')
+            net_asset_change_qty = buy_qty - sell_qty
+            
+            # Valor do ativo líquido adquirido/vendido no final do período
+            value_of_net_asset_change = net_asset_change_qty * current_price
+
+            # O P/L do período é a variação de caixa mais a variação do valor dos ativos
+            period_pl = net_cash_flow + value_of_net_asset_change
+
+            total_pl += period_pl
+            if period_pl > 0:
                 win_count += 1
             
             performance_data.append(
                 f"- Ativo: {symbol}, "
-                f"Resultado: {'Lucro' if crypto_pl > 0 else 'Prejuízo'} de {crypto_pl:.2f}, "
-                f"Total Comprado: {buys:.2f}, Total Vendido: {sells:.2f}"
+                f"Resultado do Período: {'Lucro' if period_pl > 0 else 'Prejuízo'} de {period_pl:.2f}, "
+                f"Fluxo de Caixa: {net_cash_flow:.2f}"
             )
 
         win_rate = (win_count / len(trades_by_crypto)) * 100 if trades_by_crypto else 0
@@ -175,7 +192,6 @@ def reflect_on_performance():
         performance_str = "\n".join(performance_data)
         full_report_str = f"Resumo Geral: {summary_dict}\n\nTrades Detalhados:\n{performance_str}"
         
-        # Chama a IA para análise
         ai_analysis = get_gemini_reflection(full_report_str)
 
         if ai_analysis:
@@ -189,7 +205,7 @@ def reflect_on_performance():
             )
             print(f"Log de estratégia salvo para {profile.user.username}")
         
-        time.sleep(10) # Pausa para não sobrecarregar a API
+        time.sleep(10)
     
     return "Ciclo de reflexão de performance concluído."
 
