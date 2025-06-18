@@ -1,6 +1,8 @@
 {% extends "core/base.html" %}
 {% load i18n %}
 
+{% block title %}{{ page_title }} - Crypto Trader Pro{% endblock %}
+
 {% block content %}
 <div class="max-w-xl mx-auto mt-4 sm:mt-8 bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl">
     <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-400 mb-6 sm:mb-8">{{ page_title }}</h2>
@@ -15,6 +17,7 @@
     <form method="post" novalidate id="apiKeysForm">
         {% csrf_token %}
         <div class="space-y-6">
+            <h3 class="text-lg font-medium leading-6 text-white border-b border-gray-700 pb-2">Chaves de Exchange</h3>
             <div>
                 <label for="{{ form.binance_api_key.id_for_label }}" class="form-label">{{ form.binance_api_key.label_tag }}</label>
                 {{ form.binance_api_key }}
@@ -40,9 +43,25 @@
             
             <hr class="border-gray-600 my-6">
             <div>
-                <h3 class="text-lg font-medium leading-6 text-white">Agente de Trading IA</h3>
-                <p class="mt-1 text-sm text-gray-400">Permita que nossa IA execute trades automaticamente para você com base na análise de mercado.</p>
+                <h3 class="text-lg font-medium leading-6 text-white border-b border-gray-700 pb-2">Agente de Trading IA</h3>
+                <p class="mt-2 text-sm text-gray-400">Configure a chave de API para o Gemini e os parâmetros de operação do agente.</p>
             </div>
+            
+            <!-- (ATUALIZADO) Campo para a chave de API do Gemini -->
+            <div class="pt-2">
+                <label for="{{ form.gemini_api_key.id_for_label }}" class="form-label">{{ form.gemini_api_key.label_tag }}</label>
+                {{ form.gemini_api_key }}
+                <p class="mt-1 text-xs text-gray-500">Sua chave de API para os modelos de IA do Google.</p>
+                {% for error in form.gemini_api_key.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+            </div>
+
+            <div class="pt-2">
+                <label for="{{ form.gemini_model.id_for_label }}" class="form-label">{{ form.gemini_model.label_tag }}</label>
+                {{ form.gemini_model }}
+                <p class="mt-1 text-xs text-gray-500">{{ form.gemini_model.help_text|safe }}</p>
+                {% for error in form.gemini_model.errors %}<p class="mt-1 text-xs text-red-400">{{ error }}</p>{% endfor %}
+            </div>
+
             <div class="relative flex items-start pt-4">
                 <div class="flex h-6 items-center">
                     <input id="{{ form.enable_auto_trading.id_for_label }}" name="{{ form.enable_auto_trading.html_name }}" type="checkbox" {% if form.instance.enable_auto_trading %}checked{% endif %} class="h-5 w-5 rounded border-gray-500 bg-gray-700 text-purple-500 focus:ring-purple-600">
@@ -53,7 +72,6 @@
                 </div>
             </div>
             
-            <!-- (ADICIONADO) Campos de gerenciamento de risco -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
                 <div>
                     <label for="{{ form.agent_buy_risk_percentage.id_for_label }}" class="form-label">{{ form.agent_buy_risk_percentage.label_tag }}</label>
@@ -102,7 +120,7 @@
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Spinner para o formulário principal
@@ -110,24 +128,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (form) {
         form.addEventListener('submit', function() {
             const submitButton = form.querySelector('button[type="submit"]');
-            const buttonText = submitButton.querySelector('.btn-text');
             submitButton.classList.add('loading');
             submitButton.disabled = true;
+            const buttonText = submitButton.querySelector('.btn-text');
             if (buttonText) buttonText.textContent = 'Salvando...';
         });
     }
 });
 
-// Função reutilizável para botões de âncora na Zona de Perigo
 function confirmAndLoad(element, message) {
     if (confirm(message)) {
-        const buttonText = element.querySelector('.btn-text');
         element.classList.add('loading');
-        element.style.pointerEvents = 'none'; // Desabilita o link
+        element.style.pointerEvents = 'none';
+        const buttonText = element.querySelector('.btn-text');
         if (buttonText) buttonText.textContent = 'Processando...';
-        return true; // Permite que o link seja seguido
+        return true;
     }
-    return false; // Impede a navegação se o usuário cancelar
+    return false;
 }
 </script>
 {% endblock %}

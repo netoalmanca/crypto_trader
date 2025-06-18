@@ -12,6 +12,13 @@ FIAT_CURRENCY_CHOICES = [
 ]
 BASE_RATE_CURRENCY = 'USDT'
 
+GEMINI_MODEL_CHOICES = [
+    ('gemini-2.0-flash', 'Gemini 2.0 Flash (Rápido - Padrão)'),
+    ('gemini-1.5-flash-latest', 'Gemini 1.5 Flash (Recente)'),
+    ('gemini-1.5-pro-latest', 'Gemini 1.5 Pro (Avançado e Poderoso)'),
+    ('gemini-1.0-pro', 'Gemini 1.0 Pro (Estável)'),
+]
+
 class Cryptocurrency(models.Model):
     symbol = models.CharField(max_length=20, unique=True, primary_key=True)
     name = models.CharField(max_length=100)
@@ -33,14 +40,25 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     _binance_api_key = models.TextField(blank=True)
     _binance_api_secret = models.TextField(blank=True)
+    
+    # (NOVO) Campo para a chave da API Gemini
+    _gemini_api_key = models.TextField(blank=True, verbose_name="Chave API Gemini Criptografada")
+
     preferred_fiat_currency = models.CharField(max_length=5, choices=FIAT_CURRENCY_CHOICES, default='BRL')
     use_testnet = models.BooleanField(default=True)
+    
+    gemini_model = models.CharField(
+        max_length=50,
+        choices=GEMINI_MODEL_CHOICES,
+        default='gemini-2.0-flash',
+        verbose_name="Modelo de IA Gemini",
+        help_text="Escolha o modelo de IA a ser usado para análise e decisões."
+    )
+    
     enable_auto_trading = models.BooleanField(default=False)
     agent_buy_risk_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('5.00'))
     agent_sell_risk_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('100.00'))
     agent_confidence_threshold = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('0.75'))
-
-    # (NOVO) Campo para armazenar as regras personalizadas da estratégia do agente
     agent_strategy_prompt = models.TextField(
         blank=True, null=True,
         verbose_name="Instruções da Estratégia Ativa",
@@ -51,10 +69,17 @@ class UserProfile(models.Model):
     def binance_api_key(self): return decrypt(self._binance_api_key)
     @binance_api_key.setter
     def binance_api_key(self, value: str): self._binance_api_key = encrypt(value)
+
     @property
     def binance_api_secret(self): return decrypt(self._binance_api_secret)
     @binance_api_secret.setter
     def binance_api_secret(self, value: str): self._binance_api_secret = encrypt(value)
+
+    # (NOVO) Property para a chave da API Gemini
+    @property
+    def gemini_api_key(self): return decrypt(self._gemini_api_key)
+    @gemini_api_key.setter
+    def gemini_api_key(self, value: str): self._gemini_api_key = encrypt(value)
 
     class Meta:
         verbose_name, verbose_name_plural = "Perfil de Usuário", "Perfis de Usuários"

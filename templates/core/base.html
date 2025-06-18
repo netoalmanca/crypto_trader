@@ -15,14 +15,13 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#0f172a',    // slate-900
-                        'secondary': '#1e293b',  // slate-800
-                        'accent': '#06b6d4',      // cyan-500
-                        'light-text': '#94a3b8', // slate-400
-                        'dark-text': '#e2e8f0',   // slate-200
+                        'primary': '#0f172a',
+                        'secondary': '#1e293b',
+                        'accent': '#06b6d4',
+                        'light-text': '#94a3b8',
+                        'dark-text': '#e2e8f0',
                     },
                     transitionProperty: {
-                        'width': 'width',
                         'margin': 'margin-left',
                     }
                 }
@@ -30,7 +29,6 @@
         }
     </script>
     <style>
-        /* Estilos de formulário e botões (sem alteração) */
         .form-input, select.form-input {
             background-color: #334155; color: #cbd5e1; border-color: #475569;
             width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
@@ -42,86 +40,51 @@
         }
         .btn-primary {
             display: inline-flex; align-items: center; justify-content: center;
-            padding: 0.6rem 1rem; background-color: #0891b2; color: white;
-            font-weight: 600; text-align: center; border-radius: 0.5rem;
-            transition: background-color 0.3s; cursor: pointer;
+            width: 100%; padding: 0.75rem 1rem; background-color: #0891b2; 
+            color: white; font-weight: 600; text-align: center; 
+            border-radius: 0.5rem; transition: background-color 0.3s; cursor: pointer;
         }
         .btn-primary:hover { background-color: #06b6d4; }
-        
-        /* (NOVO) Estilos para a Sidebar */
-        .sidebar {
-            transition: width 0.3s ease-in-out;
-        }
-        .sidebar-link {
-            @apply flex items-center p-2 text-base font-normal rounded-lg;
-            @apply text-light-text hover:bg-gray-700 hover:text-dark-text;
-            transition: background-color 0.2s;
-        }
-        .sidebar-link.active {
-            @apply bg-accent text-white;
-        }
-        .sidebar-link .link-text {
-            transition: opacity 0.3s ease-in-out;
-        }
-        .sidebar-link i.fa-fw {
-            transition: transform 0.3s ease-in-out;
-        }
-        /* Estilo para sidebar colapsada */
-        .sidebar-collapsed .link-text {
-            @apply opacity-0 w-0;
-        }
-        .sidebar-collapsed .sidebar-title {
-            @apply hidden;
-        }
-        .sidebar-collapsed .sidebar-link {
-            @apply justify-center;
-        }
-        .sidebar-collapsed .logo-text {
-            @apply hidden;
-        }
+        .sidebar { transition: width 0.3s ease-in-out; }
+        .sidebar-link { @apply flex items-center p-2 text-base font-normal rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white; transition: background-color 0.2s; }
+        .sidebar-link.active { @apply bg-cyan-600 text-white; }
+        .sidebar-link .link-text { transition: opacity 0.3s ease-in-out; }
+        .sidebar-collapsed .link-text, .sidebar-collapsed .logo-text, .sidebar-collapsed .sidebar-title { opacity: 0; width: 0; pointer-events: none; }
+        .sidebar-collapsed .sidebar-link { justify-content: center; }
+        .dropdown-menu { @apply origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none; }
+        .dropdown-item { @apply flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700; }
+        .modal-overlay { @apply fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none; }
+        .modal-overlay.visible { @apply opacity-100 pointer-events-auto; }
+        .modal-content { @apply bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg transform transition-transform scale-95; }
+        .modal-overlay.visible .modal-content { @apply scale-100; }
+        .spinner { @apply hidden h-5 w-5 animate-spin rounded-full border-2 border-solid border-current border-e-transparent align-[-0.125em] text-white; }
+        .loading .spinner { @apply inline-block; }
+        .loading .btn-text, .loading .icon { display: none; }
     </style>
 </head>
 <body class="bg-primary text-dark-text font-sans">
-    <div x-data="{ sidebarOpen: true }" @keydown.escape.window="sidebarOpen = false">
-        <!-- Sidebar -->
-        <aside class="sidebar fixed top-0 left-0 z-40 h-screen bg-secondary pt-4"
+    <div x-data="{ sidebarOpen: window.innerWidth > 768 }" @keydown.escape.window="sidebarOpen = false" class="flex">
+        <aside class="sidebar fixed top-0 left-0 z-40 h-screen bg-secondary pt-4 flex-shrink-0"
                :class="{'w-64': sidebarOpen, 'w-20': !sidebarOpen}">
             <div class="h-full px-3 pb-4 overflow-y-auto">
-                <!-- Logo -->
                 <a href="{% url 'core:index' %}" class="flex items-center pl-2.5 mb-5">
                     <i class="fas fa-bolt-lightning text-accent text-2xl"></i>
                     <span class="logo-text self-center text-xl font-semibold whitespace-nowrap ml-3" :class="{'hidden': !sidebarOpen}">CryptoTrader</span>
                 </a>
-
                 <ul id="nav-links" class="space-y-2">
                     {% if user.is_authenticated %}
-                        <li>
-                            <a href="{% url 'core:dashboard' %}" class="sidebar-link">
-                                <i class="fas fa-home fa-fw text-xl"></i>
-                                <span class="link-text ml-3">Dashboard</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{% url 'core:cryptocurrency_list' %}" class="sidebar-link">
-                                <i class="fa-brands fa-bitcoin fa-fw text-xl"></i>
-                                <span class="link-text ml-3">Criptomoedas</span>
-                            </a>
-                        </li>
-
-                        <li class="pt-4 pb-2">
-                            <span class="sidebar-title px-3 text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Agente IA</span>
-                        </li>
-                        <li><a href="{% url 'trading_agent:dashboard' %}" class="sidebar-link"><i class="fas fa-tachometer-alt fa-fw"></i><span class="link-text ml-3">Dashboard do Agente</span></a></li>
-                        <li><a href="{% url 'trading_agent:reports' %}" class="sidebar-link"><i class="fas fa-chart-line fa-fw"></i><span class="link-text ml-3">Relatórios de IA</span></a></li>
-                        <li><a href="{% url 'trading_agent:strategy_manager' %}" class="sidebar-link"><i class="fas fa-cogs fa-fw"></i><span class="link-text ml-3">Gestor de Estratégia</span></a></li>
-                        <li><a href="{% url 'trading_agent:backtest' %}" class="sidebar-link"><i class="fas fa-history fa-fw"></i><span class="link-text ml-3">Backtesting</span></a></li>
-                        
-                        <li class="pt-4 pb-2">
-                            <span class="sidebar-title px-3 text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Portfólio</span>
-                        </li>
-                        <li><a href="{% url 'core:reports' %}" class="sidebar-link"><i class="fas fa-chart-pie fa-fw"></i><span class="link-text ml-3">Relatório Geral</span></a></li>
-                        <li><a href="{% url 'core:transaction_history' %}" class="sidebar-link"><i class="fas fa-exchange-alt fa-fw"></i><span class="link-text ml-3">Histórico</span></a></li>
-                        <li><a href="{% url 'core:open_orders' %}" class="sidebar-link"><i class="fas fa-list-alt fa-fw"></i><span class="link-text ml-3">Ordens Abertas</span></a></li>
+                        <li><a href="{% url 'core:dashboard' %}" class="sidebar-link"><i class="fas fa-home fa-fw text-xl"></i><span class="link-text ml-3">Dashboard</span></a></li>
+                        <li><a href="{% url 'core:cryptocurrency_list' %}" class="sidebar-link"><i class="fa-brands fa-bitcoin fa-fw text-xl"></i><span class="link-text ml-3">Criptomoedas</span></a></li>
+                        <li class="pt-4 pb-2 px-3"><span class="sidebar-title text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Agente IA</span></li>
+                        <li><a href="{% url 'trading_agent:dashboard' %}" class="sidebar-link"><i class="fas fa-tachometer-alt fa-fw text-lg"></i><span class="link-text ml-3">Dashboard do Agente</span></a></li>
+                        <li><a href="{% url 'trading_agent:reports' %}" class="sidebar-link"><i class="fas fa-chart-line fa-fw text-lg"></i><span class="link-text ml-3">Relatórios de IA</span></a></li>
+                        <li><a href="{% url 'trading_agent:strategy_manager' %}" class="sidebar-link"><i class="fas fa-cogs fa-fw text-lg"></i><span class="link-text ml-3">Gestor de Estratégia</span></a></li>
+                        <li><a href="{% url 'trading_agent:backtest' %}" class="sidebar-link"><i class="fas fa-history fa-fw text-lg"></i><span class="link-text ml-3">Backtesting</span></a></li>
+                        <li><a href="{% url 'core:update_api_keys' %}" class="sidebar-link"><i class="fas fa-sliders-h fa-fw text-lg"></i><span class="link-text ml-3">Configurações do Agente</span></a></li>
+                        <li class="pt-4 pb-2 px-3"><span class="sidebar-title text-xs font-semibold uppercase text-gray-500" :class="{'hidden': !sidebarOpen}">Portfólio</span></li>
+                        <li><a href="{% url 'core:reports' %}" class="sidebar-link"><i class="fas fa-chart-pie fa-fw text-lg"></i><span class="link-text ml-3">Relatório Geral</span></a></li>
+                        <li><a href="{% url 'core:transaction_history' %}" class="sidebar-link"><i class="fas fa-exchange-alt fa-fw text-lg"></i><span class="link-text ml-3">Histórico</span></a></li>
+                        <li><a href="{% url 'core:open_orders' %}" class="sidebar-link"><i class="fas fa-list-alt fa-fw text-lg"></i><span class="link-text ml-3">Ordens Abertas</span></a></li>
                     {% else %}
                         <li><a href="{% url 'core:index' %}" class="sidebar-link"><i class="fas fa-home fa-fw"></i><span class="link-text ml-3">Início</span></a></li>
                         <li><a href="{% url 'core:login' %}" class="sidebar-link"><i class="fas fa-sign-in-alt fa-fw"></i><span class="link-text ml-3">Login</span></a></li>
@@ -129,20 +92,14 @@
                 </ul>
             </div>
         </aside>
-
-        <div class="flex flex-col flex-1 transition-margin duration-300 ease-in-out" 
-             :class="{'md:ml-64': sidebarOpen, 'md:ml-20': !sidebarOpen}">
-            <!-- Top Bar -->
+        <div class="flex flex-col flex-1 w-full transition-margin duration-300 ease-in-out" 
+             :class="{'ml-64': sidebarOpen, 'ml-20': !sidebarOpen}">
             <header class="bg-secondary/50 backdrop-blur-sm sticky top-0 z-30">
                 <div class="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
-                    <!-- Botão para colapsar/expandir sidebar -->
-                    <button @click="sidebarOpen = !sidebarOpen" class="hidden md:block p-2 rounded-md hover:bg-gray-700 text-light-text hover:text-dark-text">
+                    <button @click="sidebarOpen = !sidebarOpen" class="p-2 rounded-md hover:bg-gray-700 text-light-text hover:text-dark-text">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <!-- Espaçador -->
                     <div class="flex-1"></div>
-                    
-                    <!-- Menu do Utilizador -->
                     <div class="flex items-center">
                     {% if user.is_authenticated %}
                          <div x-data="{ dropdownOpen: false }" class="relative ml-3">
@@ -164,13 +121,11 @@
                             </div>
                         </div>
                     {% else %}
-                        <a href="{% url 'core:register' %}" class="btn-primary">Registrar</a>
+                        <a href="{% url 'core:register' %}" class="btn-primary !w-auto">Registrar</a>
                     {% endif %}
                     </div>
                 </div>
             </header>
-
-            <!-- Conteúdo Principal -->
             <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {% if messages %}
                     <div class="max-w-7xl mx-auto mb-6">
@@ -186,21 +141,16 @@
                     {% endfor %}
                     </div>
                 {% endif %}
-
                 {% block content %}{% endblock %}
             </main>
         </div>
     </div>
-    
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const currentPath = window.location.pathname;
             const navLinks = document.querySelectorAll('#nav-links a.sidebar-link');
-
             navLinks.forEach(link => {
-                const linkPath = link.getAttribute('href');
-                // Lógica para destacar o link ativo
-                if (currentPath === linkPath) {
+                if (link.getAttribute('href') === currentPath) {
                     link.classList.add('active');
                 }
             });

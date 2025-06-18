@@ -7,7 +7,7 @@ class BacktestForm(forms.Form):
     """
     Formulário para o utilizador configurar e iniciar uma nova simulação de backtesting.
     """
-    # Lista de opções de período para facilitar a seleção do utilizador
+    # (CORRIGIDO) Reintroduzida a opção '1 month ago' (Último Mês).
     PERIOD_CHOICES = [
         ('1 month ago', 'Último Mês'),
         ('3 months ago', 'Últimos 3 Meses'),

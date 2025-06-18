@@ -4,7 +4,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
-from .models import Cryptocurrency, Transaction, Holding, UserProfile, FIAT_CURRENCY_CHOICES
+from .models import Cryptocurrency, Transaction, Holding, UserProfile, FIAT_CURRENCY_CHOICES, GEMINI_MODEL_CHOICES
 from decimal import Decimal
 
 class CustomUserCreationForm(UserCreationForm):
@@ -23,12 +23,24 @@ class CustomAuthenticationForm(AuthenticationForm):
 class UserProfileAPIForm(forms.ModelForm):
     binance_api_key = forms.CharField(label=_("Sua Chave API da Binance"), widget=forms.TextInput(attrs={'class': 'form-input'}), required=False)
     binance_api_secret = forms.CharField(label=_("Seu Segredo API da Binance"), widget=forms.PasswordInput(attrs={'class': 'form-input', 'render_value': False}), required=False)
+    
+    # (NOVO) Campo para a chave da API Gemini
+    gemini_api_key = forms.CharField(label=_("Sua Chave API do Google Gemini"), widget=forms.PasswordInput(attrs={'class': 'form-input', 'render_value': False}), required=False)
+    
     preferred_fiat_currency = forms.ChoiceField(label=_("Sua Moeda Fiat Preferida"), choices=FIAT_CURRENCY_CHOICES, widget=forms.Select(attrs={'class': 'form-input'}))
     use_testnet = forms.BooleanField(
         label=_("Usar Ambiente de Teste (Testnet)"),
         required=False,
         widget=forms.CheckboxInput(attrs={'class': 'h-5 w-5 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500'})
     )
+    
+    gemini_model = forms.ChoiceField(
+        label=_("Modelo de IA Gemini"),
+        choices=GEMINI_MODEL_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        help_text=_("Escolha o modelo de IA a ser usado. 'Flash' é mais rápido, 'Pro' é mais poderoso.")
+    )
+
     enable_auto_trading = forms.BooleanField(
         label=_("Ativar Agente de Trading Automático"),
         required=False,
@@ -56,27 +68,40 @@ class UserProfileAPIForm(forms.ModelForm):
     
     class Meta:
         model = UserProfile
+        # (ATUALIZADO) Adicionado 'gemini_api_key' à lista de campos.
         fields = [
-            'binance_api_key', 'binance_api_secret', 'preferred_fiat_currency', 
-            'use_testnet', 'enable_auto_trading', 
-            'agent_buy_risk_percentage', 'agent_sell_risk_percentage',
-            'agent_confidence_threshold'
+            'binance_api_key', 'binance_api_secret', 'gemini_api_key', 
+            'preferred_fiat_currency', 'use_testnet', 'gemini_model', 
+            'enable_auto_trading', 'agent_buy_risk_percentage', 
+            'agent_sell_risk_percentage', 'agent_confidence_threshold'
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
+            # Placeholders para as chaves da Binance
             key = self.instance.binance_api_key
             secret_exists = self.instance.binance_api_secret and self.instance.binance_api_secret != 'DECRYPTION_FAILED'
             self.fields['binance_api_key'].widget.attrs['placeholder'] = f"Atual: {key[:4]}...{key[-4:]}" if key and key != 'DECRYPTION_FAILED' else "Nenhuma chave definida"
             self.fields['binance_api_secret'].widget.attrs['placeholder'] = "••••••••••••••••" if secret_exists else "Nenhum segredo definido"
+            
+            # (NOVO) Placeholder para a chave do Gemini
+            gemini_key_exists = self.instance.gemini_api_key and self.instance.gemini_api_key != 'DECRYPTION_FAILED'
+            self.fields['gemini_api_key'].widget.attrs['placeholder'] = "••••••••••••••••" if gemini_key_exists else "Nenhuma chave definida"
+
     
     def save(self, commit=True):
         profile = super().save(commit=False)
-        new_key = self.cleaned_data.get('binance_api_key')
-        new_secret = self.cleaned_data.get('binance_api_secret')
-        if new_key: profile.binance_api_key = new_key
-        if new_secret: profile.binance_api_secret = new_secret
+        # Salva as chaves da Binance se forem fornecidas
+        new_b_key = self.cleaned_data.get('binance_api_key')
+        new_b_secret = self.cleaned_data.get('binance_api_secret')
+        if new_b_key: profile.binance_api_key = new_b_key
+        if new_b_secret: profile.binance_api_secret = new_b_secret
+        
+        # (NOVO) Salva a chave do Gemini se for fornecida
+        new_g_key = self.cleaned_data.get('gemini_api_key')
+        if new_g_key: profile.gemini_api_key = new_g_key
+
         if commit: profile.save()
         return profile
 

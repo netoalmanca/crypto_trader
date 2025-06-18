@@ -318,7 +318,7 @@ def update_api_keys_view(request):
         if not form.cleaned_data.get('use_testnet'):
             messages.warning(request, 'MODO MAINNET ATIVADO. Tenha cuidado, as próximas operações usarão fundos reais.')
         return redirect('core:dashboard')
-    return render(request, 'core/profile_api_keys.html', {'form': form, 'page_title': 'Configurar Chaves API e Ambiente'})
+    return render(request, 'core/profile_api_keys.html', {'form': form, 'page_title': 'Configurar Chaves API e Agente'})
 
 @login_required
 @db_transaction.atomic
@@ -390,13 +390,17 @@ def explain_crypto_with_ai_view(request):
             if not crypto_name:
                 return JsonResponse({'error': 'Nome da criptomoeda não fornecido.'}, status=400)
 
-            gemini_api_key = settings.GEMINI_API_KEY
-            if not gemini_api_key or gemini_api_key == "SUA_CHAVE_GEMINI":
-                return JsonResponse({'error': 'A chave da API Gemini não está configurada no servidor.'}, status=500)
+            user_profile = request.user.profile
+            # (ATUALIZADO) Usa a chave de API do perfil do usuário.
+            gemini_api_key = user_profile.gemini_api_key
+            if not gemini_api_key or "DECRYPTION_FAILED" in gemini_api_key:
+                return JsonResponse({'error': 'A chave da API Gemini não está configurada no seu perfil.'}, status=500)
+            
+            model_name = user_profile.gemini_model if user_profile.gemini_model else 'gemini-2.0-flash'
 
             prompt = f"Aja como um especialista em criptomoedas. Explique o que é {crypto_name}, qual o seu propósito principal, e um ponto positivo e um negativo sobre o projeto. Seja claro e direto, em um parágrafo."
             
-            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_api_key}"
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_api_key}"
             headers = {'Content-Type': 'application/json'}
             payload = {'contents': [{'parts': [{'text': prompt}]}]}
 
