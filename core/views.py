@@ -26,6 +26,15 @@ from .models import (
 )
 from binance.client import Client 
 from binance.exceptions import BinanceAPIException
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.response import Response
+from rest_framework import status
+from django_ratelimit.decorators import ratelimit
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- Funções Helper ---
 
@@ -421,6 +430,269 @@ def explain_crypto_with_ai_view(request):
 
     return JsonResponse({'error': 'Método não permitido'}, status=405)
 
+
+@login_required
+def open_orders_view(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+    client = get_binance_client(user_profile=user_profile)
+    if not client:
+        messages.error(request, "Chaves API inválidas ou não configuradas.")
+        return redirect('core:update_api_keys')
+    if request.method == 'POST':
+        order_id, symbol = request.POST.get('order_id'), request.POST.get('symbol')
+        if order_id and symbol:
+            try:
+                client.cancel_order(symbol=symbol, orderId=order_id)
+                messages.success(request, f"Ordem {order_id} cancelada.")
+            except BinanceAPIException as e:
+                messages.error(request, f"Erro ao cancelar: {e.message}")
+        return redirect('core:open_orders')
+    processed_orders = []
+    try:
+        open_orders = client.get_open_orders()
+        for order in open_orders:
+            order['time_dt'] = datetime.datetime.fromtimestamp(order['time'] / 1000, tz=datetime.timezone.utc)
+            order['total_value'] = Decimal(order['price']) * Decimal(order['origQty'])
+            processed_orders.append(order)
+    except BinanceAPIException as e:
+        messages.error(request, f"Erro ao buscar ordens: {e.message}")
+    return render(request, 'core/open_orders.html', {'page_title': 'Minhas Ordens Abertas', 'open_orders': processed_orders})
+
+@login_required
+def transaction_history_view(request):
+    transaction_list = Transaction.objects.filter(user_profile__user=request.user).order_by('-transaction_date')
+    paginator = Paginator(transaction_list, 15) 
+    page_number = request.GET.get('page')
+    transactions_page = paginator.get_page(page_number)
+    return render(request, 'core/transaction_history.html', {'page_title': 'Histórico de Transações', 'transactions_page': transactions_page})
+
+@login_required
+def export_transactions_csv_view(request):
+    filename = f"historico_transacoes_{request.user.username}_{timezone.now().strftime('%Y%m%d')}.csv"
+    response = HttpResponse(content_type='text/csv; charset=utf-8', headers={'Content-Disposition': f'attachment; filename="{filename}"'})
+    response.write(u'\ufeff'.encode('utf8'))
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow(['Data Transacao', 'Tipo', 'Simbolo', 'Nome Cripto', 'Quantidade', 'Preco Unitario', 'Moeda Preco', 'Valor Total', 'Taxas', 'Notas'])
+    transactions = Transaction.objects.filter(user_profile__user=request.user).select_related('cryptocurrency').order_by('transaction_date')
+    for tx in transactions:
+        writer.writerow([tx.transaction_date.strftime('%Y-%m-%d %H:%M:%S'), tx.get_transaction_type_display(), tx.cryptocurrency.symbol, tx.cryptocurrency.name, f'{tx.quantity_crypto:.8f}'.replace('.', ','), f'{tx.price_per_unit:.8f}'.replace('.', ','), tx.cryptocurrency.price_currency, f'{tx.total_value:.8f}'.replace('.', ','), f'{tx.fees:.8f}'.replace('.', ','), tx.notes])
+    return response
+
+@login_required
+@db_transaction.atomic
+def add_transaction_view(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+    form = TransactionForm(request.POST or None, user_profile=user_profile)
+    if request.method == 'POST' and form.is_valid():
+        tx = form.save(commit=False); tx.user_profile = user_profile; tx.save()
+        recalculate_holdings(user_profile, request)
+        _update_crypto_prices_for_profile(user_profile)
+        _create_todays_snapshot(user_profile)
+        messages.success(request, "Transação manual registrada e portfólio recalculado!")
+        return redirect('core:dashboard')
+    return render(request, 'core/add_transaction.html', {'form': form, 'page_title': 'Adicionar Transação Manual'})
+
+@login_required
+@db_transaction.atomic
+def sync_binance_trades_view(request):
+    user_profile = get_object_or_404(UserProfile, user=request.user)
+    client = get_binance_client(user_profile=user_profile)
+    if not client:
+        messages.error(request, "Chaves API inválidas ou não configuradas para sincronizar.")
+        return redirect('core:transaction_history')
+
+    print("--- INÍCIO DA SINCRONIZAÇÃO COMPLETA COM A BINANCE ---")
+    
+    existing_trade_ids = set(Transaction.objects.filter(
+        user_profile=user_profile, 
+        binance_order_id__isnull=False
+    ).values_list('binance_order_id', flat=True))
+    print(f"Encontrados {len(existing_trade_ids)} IDs de trades já existentes no banco de dados.")
+
+    all_db_cryptos = Cryptocurrency.objects.all()
+    total_new_trades_count = 0
+
+    for crypto in all_db_cryptos:
+        api_symbol = f"{crypto.symbol.upper()}{crypto.price_currency.upper()}"
+        print(f"\nSincronizando histórico para o par: {api_symbol}")
+        
+        last_trade_id = 0
+        
+        while True:
+            try:
+                trades = client.get_my_trades(symbol=api_symbol, fromId=last_trade_id, limit=1000)
+
+                if not trades:
+                    print(f"Nenhum trade novo encontrado para {api_symbol} a partir do ID {last_trade_id}. Fim da sincronização para este par.")
+                    break
+
+                new_trades_in_batch = 0
+                for trade in trades:
+                    trade_id_str = str(trade['id'])
+                    
+                    if trade_id_str not in existing_trade_ids:
+                        Transaction.objects.update_or_create(
+                            user_profile=user_profile,
+                            binance_order_id=trade_id_str,
+                            defaults={
+                                'cryptocurrency': crypto, 
+                                'transaction_type': 'BUY' if trade['isBuyer'] else 'SELL', 
+                                'quantity_crypto': Decimal(trade['qty']), 
+                                'price_per_unit': Decimal(trade['price']), 
+                                'fees': Decimal(trade['commission']), 
+                                'transaction_date': datetime.datetime.fromtimestamp(trade['time'] / 1000, tz=datetime.timezone.utc), 
+                                'notes': f"Sincronizado da Binance. Trade ID: {trade_id_str}"
+                            }
+                        )
+                        existing_trade_ids.add(trade_id_str)
+                        new_trades_in_batch += 1
+                
+                if new_trades_in_batch > 0:
+                    print(f"  -> {new_trades_in_batch} novas transações salvas neste lote.")
+                    total_new_trades_count += new_trades_in_batch
+
+                last_trade_id = trades[-1]['id'] + 1
+                
+                if len(trades) < 1000:
+                    print(f"Fim do histórico para {api_symbol} alcançado.")
+                    break
+                
+                time.sleep(0.5)
+
+            except BinanceAPIException as e:
+                if e.code != -1121:
+                    messages.warning(request, f"Aviso ao sincronizar {api_symbol}: {e.message}")
+                else:
+                    print(f"Nenhum histórico de trade encontrado para {api_symbol}.")
+                break
+            except Exception as e:
+                messages.error(request, f"Erro inesperado ao sincronizar {api_symbol}: {e}")
+                break
+
+    print(f"\n--- FIM DA SINCRONIZAÇÃO ---")
+    
+    if total_new_trades_count > 0:
+        messages.success(request, f"{total_new_trades_count} nova(s) transação(ões) foram sincronizadas. O portfólio será recalculado.")
+    else:
+        messages.info(request, "Nenhuma nova transação encontrada. Recalculando portfólio com os dados existentes.")
+    
+    recalculate_holdings(user_profile, request)
+    _update_crypto_prices_for_profile(user_profile)
+    _create_todays_snapshot(user_profile)
+        
+    return redirect('core:transaction_history')
+
+
+@login_required
+def trade_market_buy_view(request):
+    user_profile, client = get_object_or_404(UserProfile, user=request.user), get_binance_client(user_profile=request.user.profile)
+    if not client: messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    form = MarketBuyForm(request.POST or None, user_currency=BASE_RATE_CURRENCY)
+    if request.method == 'POST' and form.is_valid():
+        crypto, api_symbol = form.cleaned_data['cryptocurrency'], f"{form.cleaned_data['cryptocurrency'].symbol.upper()}{form.cleaned_data['cryptocurrency'].price_currency.upper()}"
+        try:
+            params = {'symbol': api_symbol}
+            if form.cleaned_data['buy_type'] == 'QUANTITY':
+                quantity, symbol_info = form.cleaned_data['quantity'], client.get_symbol_info(api_symbol)
+                lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
+                if lot_size_filter: quantity = adjust_quantity_to_lot_size(str(quantity), lot_size_filter['stepSize'])
+                params['quantity'] = f'{quantity:.8f}'.rstrip('0').rstrip('.')
+            else: params['quoteOrderQty'] = form.cleaned_data['quote_quantity']
+            order = client.order_market_buy(**params)
+            _process_successful_order(user_profile, order, crypto)
+            messages.success(request, f"Ordem de compra para {api_symbol} executada!")
+            return redirect('core:dashboard')
+        except (BinanceAPIException, ValueError) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
+    return render(request, 'core/trade_market_buy.html', {'form': form, 'page_title': 'Comprar a Mercado'})
+
+@login_required
+def trade_market_sell_view(request):
+    user_profile, client = get_object_or_404(UserProfile, user=request.user), get_binance_client(user_profile=request.user.profile)
+    if not client: messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    form = MarketSellForm(request.POST or None, user_profile=user_profile, quote_currency=BASE_RATE_CURRENCY)
+    if request.method == 'POST' and form.is_valid():
+        crypto, api_symbol = form.cleaned_data['cryptocurrency'], f"{form.cleaned_data['cryptocurrency'].symbol.upper()}{form.cleaned_data['cryptocurrency'].price_currency.upper()}"
+        try:
+            quantity_to_sell = Decimal('0')
+            if form.cleaned_data['sell_type'] == 'QUANTITY': quantity_to_sell = form.cleaned_data['quantity']
+            else:
+                ticker, price = client.get_symbol_ticker(symbol=api_symbol), Decimal(client.get_symbol_ticker(symbol=api_symbol)['price'])
+                if price > 0: quantity_to_sell = form.cleaned_data['quote_quantity_to_receive'] / price
+                else: raise ValueError("Preço de mercado inválido.")
+            holding = Holding.objects.get(user_profile=user_profile, cryptocurrency=crypto)
+            if holding.quantity < quantity_to_sell: raise ValueError("Saldo insuficiente.")
+            symbol_info, lot_size_filter = client.get_symbol_info(api_symbol), next((f for f in client.get_symbol_info(api_symbol)['filters'] if f['filterType'] == 'LOT_SIZE'), None)
+            if lot_size_filter: quantity_to_sell = adjust_quantity_to_lot_size(str(quantity_to_sell), lot_size_filter['stepSize'])
+            if quantity_to_sell <= 0: raise ValueError("Quantidade a vender deve ser maior que zero.")
+            order = client.order_market_sell(symbol=api_symbol, quantity=f'{quantity_to_sell:.8f}'.rstrip('0').rstrip('.'))
+            _process_successful_order(user_profile, order, crypto)
+            messages.success(request, f"Ordem de venda para {api_symbol} executada!")
+            return redirect('core:dashboard')
+        except (BinanceAPIException, ValueError, Holding.DoesNotExist) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
+    return render(request, 'core/trade_market_sell.html', {'form': form, 'page_title': 'Vender a Mercado'})
+
+@login_required
+def trade_limit_buy_view(request):
+    user_profile, client = get_object_or_404(UserProfile, user=request.user), get_binance_client(user_profile=request.user.profile)
+    if not client: messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    form = LimitBuyForm(request.POST or None, user_currency=user_profile.preferred_fiat_currency)
+    if request.method == 'POST' and form.is_valid():
+        crypto, api_symbol = form.cleaned_data['cryptocurrency'], f"{form.cleaned_data['cryptocurrency'].symbol.upper()}{form.cleaned_data['cryptocurrency'].price_currency.upper()}"
+        try:
+            price_in_user_currency, price_in_base_currency = form.cleaned_data['price'], form.cleaned_data['price']
+            if user_profile.preferred_fiat_currency != crypto.price_currency:
+                rate_obj = ExchangeRate.objects.get(from_currency=crypto.price_currency, to_currency=user_profile.preferred_fiat_currency)
+                price_in_base_currency = price_in_user_currency / rate_obj.rate
+            quantity = form.cleaned_data['quantity'] if form.cleaned_data['order_type'] == 'QUANTITY' else form.cleaned_data['total_value'] / price_in_user_currency
+            symbol_info = client.get_symbol_info(api_symbol)
+            price_in_base_currency = adjust_price_to_tick_size(str(price_in_base_currency), next(f['tickSize'] for f in symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER'))
+            quantity = adjust_quantity_to_lot_size(str(quantity), next(f['stepSize'] for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'))
+            if quantity <= 0: raise ValueError("A quantidade final deve ser maior que zero.")
+            order = client.order_limit_buy(symbol=api_symbol, quantity=f'{quantity:.8f}'.rstrip('0').rstrip('.'), price=f'{price_in_base_currency:.8f}'.rstrip('0').rstrip('.'))
+            messages.success(request, f"Ordem limite de COMPRA enviada! ID: {order['orderId']}")
+            return redirect('core:open_orders')
+        except (BinanceAPIException, ValueError, ExchangeRate.DoesNotExist) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
+    return render(request, 'core/trade_limit_buy.html', {'page_title': "Comprar com Ordem Limite"})
+
+@login_required
+def trade_limit_sell_view(request):
+    user_profile, client = get_object_or_404(UserProfile, user=request.user), get_binance_client(user_profile=request.user.profile)
+    if not client: messages.error(request, "Chaves API inválidas."); return redirect('core:update_api_keys')
+    form = LimitSellForm(request.POST or None, user_profile=user_profile)
+    if request.method == 'POST' and form.is_valid():
+        crypto, api_symbol = form.cleaned_data['cryptocurrency'], f"{form.cleaned_data['cryptocurrency'].symbol.upper()}{form.cleaned_data['cryptocurrency'].price_currency.upper()}"
+        try:
+            price_in_user_currency, price_in_base_currency = form.cleaned_data['price'], form.cleaned_data['price']
+            if user_profile.preferred_fiat_currency != crypto.price_currency:
+                rate_obj = ExchangeRate.objects.get(from_currency=crypto.price_currency, to_currency=user_profile.preferred_fiat_currency)
+                price_in_base_currency = price_in_user_currency / rate_obj.rate
+            quantity = form.cleaned_data['quantity'] if form.cleaned_data['order_type'] == 'QUANTITY' else form.cleaned_data['total_value'] / price_in_user_currency
+            symbol_info = client.get_symbol_info(api_symbol)
+            price_in_base_currency = adjust_price_to_tick_size(str(price_in_base_currency), next(f['tickSize'] for f in symbol_info['filters'] if f['filterType'] == 'PRICE_FILTER'))
+            quantity = adjust_quantity_to_lot_size(str(quantity), next(f['stepSize'] for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'))
+            if quantity <= 0: raise ValueError("A quantidade final deve ser maior que zero.")
+            order = client.order_limit_sell(symbol=api_symbol, quantity=f'{quantity:.8f}'.rstrip('0').rstrip('.'), price=f'{price_in_base_currency:.8f}'.rstrip('0').rstrip('.'))
+            messages.success(request, f"Ordem limite de VENDA enviada! ID: {order['orderId']}")
+            return redirect('core:open_orders')
+        except (BinanceAPIException, ValueError, ExchangeRate.DoesNotExist) as e: messages.error(request, f"Erro: {getattr(e, 'message', str(e))}")
+    return render(request, 'core/trade_limit_sell.html', {'page_title': "Vender com Ordem Limite"})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([UserRateThrottle])
+@ratelimit(key='user', rate='10/m', block=True)
+def portfolio_view(request):
+    """
+    Retorna o portfólio do usuário autenticado.
+    Aplica rate limiting e tratamento robusto de erros.
+    """
+    try:
+        holdings = Holding.objects.filter(user_profile=request.user.profile).select_related('cryptocurrency')
+        serializer = HoldingSerializer(holdings, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Erro ao buscar portfólio para user {request.user.id}: {e}")
+        return Response({"error": "Erro interno ao buscar portfólio."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @login_required
 def open_orders_view(request):

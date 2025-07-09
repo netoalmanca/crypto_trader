@@ -3,4 +3,6 @@ db.sqlite3
 media
 .env
 *.pyc
-migrations
+__pycache__/
+/staticfiles/
+/media/

@@ -4,17 +4,31 @@ import os
 from dotenv import load_dotenv
 from celery.schedules import crontab
 from decimal import Decimal
-
-load_dotenv(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
+import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-secret-key-for-dev-only')
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
-ALLOWED_HOSTS_STRING = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost')
-ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',') if host.strip()]
 
-FIELD_ENCRYPTION_KEY = os.environ.get('DJANGO_FIELD_ENCRYPTION_KEY')
-NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
+env = environ.Env(
+    DEBUG=(bool, False)
+)
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+SECRET_KEY = env('DJANGO_SECRET_KEY')
+DEBUG = env('DEBUG')
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST'),
+        'PORT': env('DB_PORT'),
+    }
+}
 
 # Application definition
 INSTALLED_APPS = [
@@ -24,6 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.humanize', 'core.apps.CoreConfig',
     'trading_agent.apps.TradingAgentConfig',
     'django_celery_beat',
+    'rest_framework',
+    'django_ratelimit',
 ]
 
 MIDDLEWARE = [
@@ -55,8 +71,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'crypto_trader.wsgi.application'
 ASGI_APPLICATION = 'crypto_trader.asgi.application'
 
-DATABASES = { 'default': { 'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3' } }
-
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 8}},
@@ -78,8 +92,8 @@ LOGIN_URL, LOGIN_REDIRECT_URL, LOGOUT_REDIRECT_URL = 'core:login', 'core:dashboa
 
 # --- Celery Settings ---
 # (CORRIGIDO) Aponta para 'localhost' em vez de 'redis' para desenvolvimento local.
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = env('REDIS_URL')
+CELERY_RESULT_BACKEND = env('REDIS_URL')
 CELERY_BROKER_POOL_LIMIT = 0 
 CELERY_ACCEPT_CONTENT, CELERY_TASK_SERIALIZER, CELERY_RESULT_SERIALIZER = ['json'], 'json', 'json'
 CELERY_TIMEZONE, CELERY_TASK_TRACK_STARTED, CELERY_TASK_TIME_LIMIT = TIME_ZONE, True, 3600
@@ -118,3 +132,35 @@ CELERY_BEAT_SCHEDULE = {
 # --- Trading Agent Settings ---
 AGENT_BUY_RISK_PERCENTAGE = Decimal('0.05')
 AGENT_SELL_RISK_PERCENTAGE = Decimal('1.0')
+
+# Segurança
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Rate Limiting (DRF)
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '100/minute',
+    }
+}
+
+# CORS
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': env('REDIS_URL'),  # Usa a mesma URL do Redis já definida no .env
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}

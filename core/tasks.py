@@ -8,8 +8,12 @@ from decimal import Decimal, InvalidOperation
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 import requests.exceptions 
+import requests
+import logging
 
 from .models import Cryptocurrency, ExchangeRate, FIAT_CURRENCY_CHOICES, BASE_RATE_CURRENCY, UserProfile, Holding, PortfolioSnapshot
+
+logger = logging.getLogger(__name__)
 
 @shared_task(
     bind=True, name="core.tasks.update_all_cryptocurrency_prices",
@@ -150,3 +154,49 @@ def create_daily_portfolio_snapshots():
     result_message = f"Tarefa de Snapshots finalizada. {created_count} snapshots criados."
     print(f"[{timezone.now()}] {result_message}")
     return result_message
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)
+def fetch_market_data(self, symbol):
+    """
+    Busca o preço de mercado de uma criptomoeda na Binance.
+    Retry exponencial em caso de falha de rede ou timeout.
+    """
+    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"Preço de {symbol} obtido com sucesso: {data.get('price')}")
+        return data
+    except requests.RequestException as exc:
+        logger.error(f"Erro ao buscar preço de {symbol}: {exc}")
+        try:
+            self.retry(exc=exc, countdown=2 ** self.request.retries)
+        except self.MaxRetriesExceededError:
+            logger.critical(f"Falha definitiva ao buscar preço de {symbol} após múltiplas tentativas.")
+            # Aqui pode-se integrar com Sentry ou outro sistema de alerta
+            return None
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)
+def fetch_news_sentiment(self, query):
+    """
+    Busca notícias e analisa sentimento via NewsAPI e IA.
+    """
+    url = f"https://newsapi.org/v2/everything?q={query}&apiKey={settings.NEWSAPI_KEY}"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        articles = response.json().get('articles', [])
+        # Aqui você pode chamar um serviço de IA para análise de sentimento
+        # Exemplo fictício:
+        # sentiment = analyze_sentiment_with_gemini(articles)
+        sentiment = "neutral"  # Placeholder
+        logger.info(f"Sentimento para '{query}': {sentiment}")
+        return {"query": query, "sentiment": sentiment}
+    except requests.RequestException as exc:
+        logger.error(f"Erro ao buscar notícias para '{query}': {exc}")
+        try:
+            self.retry(exc=exc, countdown=2 ** self.request.retries)
+        except self.MaxRetriesExceededError:
+            logger.critical(f"Falha definitiva ao buscar notícias para '{query}' após múltiplas tentativas.")
+            return None

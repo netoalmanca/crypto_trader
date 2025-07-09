@@ -1,4 +1,40 @@
-Crypto Trader Pro com Agente de IA (Gemini)
+# Crypto Trader Pro
+
+## Segurança e Configuração
+
+- **Nunca versionar o arquivo `.env`**. Use o `.env.example` como referência.
+- Variáveis sensíveis são carregadas via [django-environ](https://github.com/joke2k/django-environ).
+- Use ferramentas como AWS Secrets Manager ou Docker Secrets em produção.
+
+## Testes e Qualidade
+
+- Execute testes com:
+  ```
+  pytest
+  ```
+- Pipeline de CI/CD automatizado via GitHub Actions (ver `.github/workflows/ci.yml`).
+
+## Monitoramento
+
+- Integração com Sentry para rastreamento de erros.
+- Recomenda-se uso de Prometheus/Grafana para métricas.
+
+## Rate Limiting e Segurança
+
+- Endpoints protegidos contra abuso com django-ratelimit e throttling do DRF.
+- Todas as integrações externas possuem tratamento de erros e retries.
+
+## Deploy
+
+- Recomenda-se deploy automatizado via CI/CD.
+- Exemplo de pipeline em `.github/workflows/ci.yml`.
+
+## Observabilidade
+
+- Logs centralizados e monitoramento de tarefas assíncronas.
+
+---
+
 🚀 Sobre o Projeto
 O Crypto Trader Pro é uma plataforma avançada de trading de criptomoedas, desenvolvida em Django, que transforma a gestão de ativos digitais através da automação inteligente. A aplicação integra-se diretamente com a API da Binance para dados de mercado e execução de ordens, e utiliza o poder da API Google Gemini como um cérebro estratégico para:
 
